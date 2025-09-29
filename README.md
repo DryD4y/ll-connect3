@@ -1,6 +1,6 @@
-# L-Connect 3 Linux Port
+# Linux L-Connect 3
 
-A Qt-based Linux port of L-Connect 3 for Lian Li hardware, featuring a modern dark theme interface that closely mimics the original Windows application.
+A Qt-based Linux port of L-Connect 3 for Lian Li hardware, that closely mimics the original Windows application.
 
 ## Features
 
@@ -212,28 +212,9 @@ ll-connect3/
 - **Real-time Animation**: Color-changing fan animations
 - **Port Management**: Individual port configuration
 
-## Customization
-
-### Styling
-The application uses Qt stylesheets for theming. Key style classes:
-- `#sidebar`: Left navigation sidebar
-- `#monitoringCard`: System monitoring cards
-- `#customSlider`: Custom slider controls
-- `#fanWidget`: Fan visualization widgets
-
-### Adding New Features
-1. Create new page class in `src/pages/`
-2. Add navigation button in `MainWindow::setupSidebar()`
-3. Add page to content stack in `MainWindow::setupMainContent()`
-4. Implement page-specific functionality
-
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+To contribute to this project please check out [CONTRIBUTING](CONTRIBUTING) 
 
 ## License
 

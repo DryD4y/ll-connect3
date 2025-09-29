@@ -15,6 +15,7 @@
 QT_BEGIN_NAMESPACE
 class QAction;
 class QMenu;
+namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 class SystemInfoPage;
@@ -36,6 +37,7 @@ private slots:
     void onTabChanged(int index);
 
 private:
+    Ui::MainWindow *ui;
     void setupUI();
     void setupSidebar();
     void setupTopTabs();

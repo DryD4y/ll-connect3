@@ -41,14 +41,16 @@ target_include_directories(lian_li_qt_integration
         src/usb
 )
 
-# Enable Qt6 automatic MOC
+# Enable Qt6 automatic MOC, UIC, and RCC
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Source files
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
+    src/mainwindow.ui
     src/pages/systeminfopage.cpp
     src/pages/fanprofilepage.cpp
     src/pages/lightingpage.cpp

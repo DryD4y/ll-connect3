@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "ui_mainwindow.h"
 #include "pages/systeminfopage.h"
 #include "pages/fanprofilepage.h"
 #include "pages/lightingpage.h"
@@ -14,11 +15,15 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
     , m_currentPage(0)
 {
     // Enable High DPI scaling for this window
     setAttribute(Qt::WA_NoSystemBackground, false);
     setAttribute(Qt::WA_OpaquePaintEvent, true);
+    
+    // Setup UI from .ui file
+    ui->setupUi(this);
     
     setupUI();
     applyStyles();
@@ -38,23 +43,38 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    delete ui;
 }
 
 void MainWindow::setupUI()
 {
-    // Create central widget
-    m_centralWidget = new QWidget(this);
-    m_centralWidget->setObjectName("centralWidget");
-    setCentralWidget(m_centralWidget);
+    // UI is already set up by ui->setupUi(this)
+    // Now we need to connect signals and set up additional functionality
     
-    // Main layout
-    m_mainLayout = new QHBoxLayout(m_centralWidget);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->setSpacing(0);
+    // Connect navigation buttons
+    connect(ui->systemInfoBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
+    connect(ui->fanProfileBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
+    connect(ui->lightingBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
+    connect(ui->slInfinityBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
+    connect(ui->settingsBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
     
-    setupSidebar();
-    setupTopTabs();
-    setupMainContent();
+    // Create page instances
+    m_systemInfoPage = new SystemInfoPage();
+    m_fanProfilePage = new FanProfilePage();
+    m_lightingPage = new LightingPage();
+    m_slInfinityPage = new SLInfinityPage();
+    m_settingsPage = new SettingsPage();
+    
+    // Add pages to content stack
+    ui->contentStack->addWidget(m_systemInfoPage);
+    ui->contentStack->addWidget(m_fanProfilePage);
+    ui->contentStack->addWidget(m_lightingPage);
+    ui->contentStack->addWidget(m_slInfinityPage);
+    ui->contentStack->addWidget(m_settingsPage);
+    
+    // Set initial page
+    ui->contentStack->setCurrentIndex(0);
+    ui->systemInfoBtn->setChecked(true);
 }
 
 void MainWindow::setupSidebar()
@@ -397,30 +417,30 @@ void MainWindow::onNavigationClicked()
     if (!button) return;
     
     // Uncheck all buttons
-    m_systemInfoBtn->setChecked(false);
-    m_fanProfileBtn->setChecked(false);
-    m_lightingBtn->setChecked(false);
-    m_slInfinityBtn->setChecked(false);
-    m_settingsBtn->setChecked(false);
+    ui->systemInfoBtn->setChecked(false);
+    ui->fanProfileBtn->setChecked(false);
+    ui->lightingBtn->setChecked(false);
+    ui->slInfinityBtn->setChecked(false);
+    ui->settingsBtn->setChecked(false);
     
     // Check clicked button
     button->setChecked(true);
     
     // Switch to corresponding page
-    if (button == m_systemInfoBtn) {
-        m_contentStack->setCurrentWidget(m_systemInfoPage);
+    if (button == ui->systemInfoBtn) {
+        ui->contentStack->setCurrentWidget(m_systemInfoPage);
         m_currentPage = 0;
-    } else if (button == m_fanProfileBtn) {
-        m_contentStack->setCurrentWidget(m_fanProfilePage);
+    } else if (button == ui->fanProfileBtn) {
+        ui->contentStack->setCurrentWidget(m_fanProfilePage);
         m_currentPage = 1;
-    } else if (button == m_lightingBtn) {
-        m_contentStack->setCurrentWidget(m_lightingPage);
+    } else if (button == ui->lightingBtn) {
+        ui->contentStack->setCurrentWidget(m_lightingPage);
         m_currentPage = 2;
-    } else if (button == m_slInfinityBtn) {
-        m_contentStack->setCurrentWidget(m_slInfinityPage);
+    } else if (button == ui->slInfinityBtn) {
+        ui->contentStack->setCurrentWidget(m_slInfinityPage);
         m_currentPage = 3;
-    } else if (button == m_settingsBtn) {
-        m_contentStack->setCurrentWidget(m_settingsPage);
+    } else if (button == ui->settingsBtn) {
+        ui->contentStack->setCurrentWidget(m_settingsPage);
         m_currentPage = 4;
     }
 }

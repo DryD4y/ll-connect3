@@ -1,20 +1,4 @@
-# Build directories
-build/
-cmake-build-*/
-
-# CMake generated files
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Testing/
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps/
-
-# Qt generated files
+# Qt Creator
 *.pro.user
 *.pro.user.*
 *.qbs.user
@@ -28,51 +12,75 @@ ui_*.h
 *.jsc
 Makefile*
 *build-*
-*.qm
-*.prl
+*_plugin_import.cpp
+/.qmake.cache
+/.qmake.stash
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+Makefile*
+*build-*
+*_plugin_import.cpp
+/.qmake.cache
+/.qmake.stash
 
-# Qt Creator
-*.autosave
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+build/
+build-*/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Qt
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+Makefile*
+*build-*
+*_plugin_import.cpp
+/.qmake.cache
+/.qmake.stash
 
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
+# Binaries
+LConnect3
+*.exe
+*.dll
 *.so
 *.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
 *.lib
 
-# Executables
-*.exe
-*.out
-*.app
-LConnect3
-
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS generated files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -81,13 +89,27 @@ LConnect3
 ehthumbs.db
 Thumbs.db
 
-# Temporary files
+# Debug
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
 *.tmp
-*.temp
+*.tmp_proj
 *.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
 
-# Package files
-*.deb
-*.rpm
-*.tar.gz
-*.zip
+# Qt Creator
+*.autosave
