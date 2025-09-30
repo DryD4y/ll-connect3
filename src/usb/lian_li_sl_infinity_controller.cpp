@@ -13,11 +13,12 @@
 #include <cstring>
 #include <chrono>
 #include <thread>
+#include <fstream>
 
 using namespace std::chrono_literals;
 
 LianLiSLInfinityController::LianLiSLInfinityController()
-    : m_handle(nullptr)
+    : m_handle(nullptr), m_initialized(false)
 {
 }
 
@@ -28,19 +29,25 @@ LianLiSLInfinityController::~LianLiSLInfinityController()
 
 bool LianLiSLInfinityController::Initialize()
 {
+    std::cout << "Initializing Lian Li SL Infinity controller..." << std::endl;
+    
     // Initialize HID API
     if (hid_init() < 0)
     {
         std::cerr << "Failed to initialize HID API" << std::endl;
         return false;
     }
+    
+    std::cout << "HID API initialized successfully" << std::endl;
 
     // Open device
     if (!OpenDevice())
     {
+        std::cout << "Failed to open Lian Li device" << std::endl;
         return false;
     }
 
+    std::cout << "Lian Li SL Infinity controller initialized successfully" << std::endl;
     return true;
 }
 
@@ -73,23 +80,45 @@ std::string LianLiSLInfinityController::GetSerialNumber() const
 bool LianLiSLInfinityController::OpenDevice()
 {
     // Enumerate HID devices
+    std::cout << "Enumerating HID devices for VID:0x0CF2, PID:0xA102..." << std::endl;
     struct hid_device_info* devs = hid_enumerate(0x0CF2, 0xA102); // SL Infinity VID:PID
     struct hid_device_info* cur_dev = devs;
 
     if (devs == nullptr)
     {
         std::cerr << "No Lian Li SL Infinity devices found" << std::endl;
+        std::cout << "Trying to enumerate all HID devices..." << std::endl;
+        devs = hid_enumerate(0x0, 0x0); // Enumerate all devices
+        cur_dev = devs;
+        
+        if (devs == nullptr) {
+            std::cerr << "No HID devices found at all!" << std::endl;
+            return false;
+        }
+        
+        std::cout << "Found HID devices, looking for Lian Li..." << std::endl;
+        while (cur_dev) {
+            std::cout << "HID Device: VID=0x" << std::hex << cur_dev->vendor_id 
+                      << ", PID=0x" << cur_dev->product_id 
+                      << ", Path=" << cur_dev->path << std::dec << std::endl;
+            cur_dev = cur_dev->next;
+        }
+        hid_free_enumeration(devs);
         return false;
     }
+    
+    std::cout << "Found Lian Li SL Infinity device, attempting to open..." << std::endl;
 
     // Find the first SL Infinity device
     while (cur_dev)
     {
         if (cur_dev->vendor_id == 0x0CF2 && cur_dev->product_id == 0xA102)
         {
+            std::cout << "Trying to open device at path: " << cur_dev->path << std::endl;
             m_handle = hid_open_path(cur_dev->path);
             if (m_handle)
             {
+                std::cout << "SUCCESS: Opened Lian Li device!" << std::endl;
                 m_deviceName = "Lian Li UNI HUB SL Infinity";
                 m_location = std::string("HID: ") + cur_dev->path;
                 
@@ -99,6 +128,10 @@ bool LianLiSLInfinityController::OpenDevice()
                 
                 hid_free_enumeration(devs);
                 return true;
+            }
+            else
+            {
+                std::cout << "FAILED: Could not open device at " << cur_dev->path << std::endl;
             }
         }
         cur_dev = cur_dev->next;
@@ -337,13 +370,29 @@ bool LianLiSLInfinityController::SetChannelMode(uint8_t channel, uint8_t mode)
 
 bool LianLiSLInfinityController::SetChannelSpeed(uint8_t channel, uint8_t speed)
 {
-    if (m_handle == nullptr || channel >= UNIHUB_SLINF_CHANNEL_COUNT)
+    if (channel >= UNIHUB_SLINF_CHANNEL_COUNT)
     {
+        std::cout << "SetChannelSpeed failed: channel=" << (int)channel << ", max=" << UNIHUB_SLINF_CHANNEL_COUNT << std::endl;
         return false;
     }
 
-    // Speed will be applied in Synchronize()
-    return true;
+    // Use kernel driver's /proc interface instead of direct HID
+    // The kernel driver handles all the USB communication for us
+    std::string procPath = "/proc/Lian_li_SL_INFINITY/Port_" + std::to_string(channel + 1) + "/fan_speed";
+    
+    std::cout << "Using kernel driver: " << procPath << " = " << (int)speed << "%" << std::endl;
+    
+    // Write speed to kernel driver
+    std::ofstream file(procPath);
+    if (file.is_open()) {
+        file << (int)speed;
+        file.close();
+        std::cout << "Successfully set Port " << (channel + 1) << " to " << (int)speed << "% via kernel driver" << std::endl;
+        return true;
+    } else {
+        std::cout << "Failed to open " << procPath << " - kernel driver not available?" << std::endl;
+        return false;
+    }
 }
 
 bool LianLiSLInfinityController::SetChannelDirection(uint8_t channel, uint8_t direction)

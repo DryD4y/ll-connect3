@@ -127,6 +127,7 @@ private:
     std::string m_firmwareVersion;
     std::string m_serialNumber;
     std::string m_location;
+    bool m_initialized;
     
     // Internal methods
     bool OpenDevice();

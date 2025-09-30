@@ -11,6 +11,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
+# Find hidapi
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(HIDAPI REQUIRED hidapi-hidraw)
+
 # Create resources file
 qt6_add_resources(RESOURCES resources.qrc)
 
@@ -57,6 +61,7 @@ set(SOURCES
     src/pages/slinfinitypage.cpp
     src/pages/settingspage.cpp
     src/widgets/fanwidget.cpp
+    src/widgets/fancurvewidget.cpp
     src/widgets/monitoringcard.cpp
     src/widgets/customslider.cpp
 )
@@ -70,6 +75,7 @@ set(HEADERS
     src/pages/slinfinitypage.h
     src/pages/settingspage.h
     src/widgets/fanwidget.h
+    src/widgets/fancurvewidget.h
     src/widgets/monitoringcard.h
     src/widgets/customslider.h
 )
@@ -85,7 +91,12 @@ target_link_libraries(LConnect3
     Qt6::Core
     Qt6::Widgets
     lian_li_qt_integration
+    lian_li_sl_infinity_controller
+    ${HIDAPI_LIBRARIES}
 )
+
+# Add hidapi include directories
+target_include_directories(LConnect3 PRIVATE ${HIDAPI_INCLUDE_DIRS})
 
 # Set target properties
 set_target_properties(LConnect3 PROPERTIES

@@ -15,6 +15,8 @@
 #include <QRadioButton>
 #include <QCheckBox>
 #include <QWidget>
+#include "widgets/fancurvewidget.h"
+#include "usb/lian_li_sl_infinity_controller.h"
 
 class FanProfilePage : public QWidget
 {
@@ -36,6 +38,13 @@ private:
     void setupFanCurve();
     void setupControls();
     void updateFanCurve();
+    void updateTemperature();
+    void updateFanRPMs();
+    int calculateRPMForTemperature(int temperature);
+    int getRealCPUTemperature();
+    QVector<int> getRealFanRPMs();
+    void controlFanSpeeds();
+    void setFanSpeed(int port, int speedPercent);
     
     QVBoxLayout *m_mainLayout;
     QVBoxLayout *m_contentLayout;
@@ -45,8 +54,8 @@ private:
     // Fan table
     QTableWidget *m_fanTable;
     
-    // Fan curve (simplified)
-    QWidget *m_fanCurveWidget;
+    // Fan curve
+    FanCurveWidget *m_fanCurveWidget;
     
     // Controls
     QGroupBox *m_profileGroup;
@@ -66,8 +75,20 @@ private:
     QPushButton *m_applyToAllBtn;
     QPushButton *m_defaultBtn;
     
-    // Update timer
+    // Update timers
     QTimer *m_updateTimer;
+    QTimer *m_tempUpdateTimer;
+    QTimer *m_fanRPMTimer;
+    
+    // Cached temperature for real-time updates
+    int m_cachedTemperature;
+    int m_temperatureCounter;
+    
+    // Cached fan RPMs
+    QVector<int> m_cachedFanRPMs;
+    
+    // HID controller for fan control
+    LianLiSLInfinityController *m_hidController;
 };
 
 #endif // FANPROFILEPAGE_H
