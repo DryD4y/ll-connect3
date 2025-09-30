@@ -1,36 +1,30 @@
-# Qt Creator
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
-*.qmlc
-*.jsc
-Makefile*
-*build-*
-*_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
-*.qmlc
-*.jsc
-Makefile*
-*build-*
-*_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
+# Compiled Object files
+*.o
+*.ko
+*.obj
+
+# Kernel modules
+*.mod
+*.mod.c
+*.mod.o
+Module.symvers
+modules.order
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Executables
+LConnect3
+*.exe
+*.out
+*.app
 
 # CMake
 CMakeCache.txt
@@ -58,20 +52,9 @@ qrc_*.cpp
 ui_*.h
 *.qmlc
 *.jsc
-Makefile*
-*build-*
 *_plugin_import.cpp
 /.qmake.cache
 /.qmake.stash
-
-# Binaries
-LConnect3
-*.exe
-*.dll
-*.so
-*.dylib
-*.a
-*.lib
 
 # IDE
 .vscode/
@@ -79,6 +62,7 @@ LConnect3
 *.swp
 *.swo
 *~
+*.autosave
 
 # OS
 .DS_Store
@@ -111,5 +95,21 @@ Thumbs.db
 *.svclog
 *.scc
 
-# Qt Creator
-*.autosave
+# Temporary files
+*.bak
+*.backup
+*.orig
+*.rej
+*.tmp
+*.temp
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+*.7z
+
+# Documentation build
+docs/_build/
+docs/build/

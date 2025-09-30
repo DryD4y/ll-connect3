@@ -128,10 +128,27 @@ static int current_direction = 0x00;  // Right
 module_param(safety_mode, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(safety_mode, "Enable safety mode (1=on, 0=off). Limits fan speeds and validates commands.");
 
+// RPM to percentage calibration table based on actual device testing
+struct rpm_percent_map {
+	int rpm;
+	int percent;
+};
+
+static const struct rpm_percent_map rpm_calibration[] = {
+	{800, 20}, {900, 30}, {1000, 40}, {1100, 50},
+	{1200, 60}, {1300, 70}, {1400, 80}, {1500, 85},
+	{1600, 90}, {1700, 92}, {1800, 94}, {1900, 96},
+	{2000, 98}, {2100, 255}  // Use 0xFF (255) for maximum performance
+};
+
+#define RPM_CALIBRATION_SIZE (sizeof(rpm_calibration) / sizeof(rpm_calibration[0]))
+
 // Function declarations
 static int sl_infinity_probe(struct hid_device *hdev, const struct hid_device_id *id);
 static void sl_infinity_remove(struct hid_device *hdev);
 static int send_hid_feature_report(uint8_t mode, uint8_t speed, uint8_t brightness, uint8_t direction);
+static int send_rpm_step_report(uint8_t step);
+static int lookup_percent(int target_rpm);
 static int send_fan_profile_command(uint8_t profile);
 static int send_lighting_effect_command(uint8_t effect, uint8_t speed, uint8_t brightness, uint8_t direction);
 static int send_initialization_sequence(void);
@@ -214,10 +231,10 @@ static struct hid_driver sl_infinity_driver = {
 	.remove = sl_infinity_remove,
 };
 
-// Send HID Feature Report (7-byte packet)
+// Send HID Feature Report (7-byte packet - original working approach)
 static int send_hid_feature_report(uint8_t mode, uint8_t speed, uint8_t brightness, uint8_t direction)
 {
-	uint8_t report[PACKET_SIZE];
+	uint8_t report[7];  // 7 bytes - original working approach
 	int ret;
 	
 	if (!dev) {
@@ -225,8 +242,8 @@ static int send_hid_feature_report(uint8_t mode, uint8_t speed, uint8_t brightne
 		return -ENODEV;
 	}
 	
-	// Build 7-byte HID Feature Report
-	report[0] = REPORT_ID;     // Report ID (0xE0)
+	// Build 7-byte HID report (original working approach)
+	report[0] = 0xE0;          // Report ID (0xE0 - original working approach)
 	report[1] = mode;          // Mode (Profile/Effect selector)
 	report[2] = 0x00;          // Reserved
 	report[3] = speed;         // Speed (0x00-0x64)
@@ -237,8 +254,8 @@ static int send_hid_feature_report(uint8_t mode, uint8_t speed, uint8_t brightne
 	printk(KERN_INFO "Lian li SL-Infinity hub: Sending HID report: %02x %02x %02x %02x %02x %02x %02x\n",
 	       report[0], report[1], report[2], report[3], report[4], report[5], report[6]);
 	
-	// Send HID Feature Report
-	ret = hid_hw_raw_request(dev, REPORT_ID, report, PACKET_SIZE, HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
+	// Send HID Feature Report (original working approach)
+	ret = hid_hw_raw_request(dev, 0xE0, report, 7, HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
 	if (ret < 0) {
 		printk(KERN_ERR "Lian li SL-Infinity hub: HID feature report failed: %d\n", ret);
 		return ret;
@@ -246,6 +263,72 @@ static int send_hid_feature_report(uint8_t mode, uint8_t speed, uint8_t brightne
 	
 	printk(KERN_INFO "Lian li SL-Infinity hub: HID feature report sent successfully\n");
 	return 0;
+}
+
+// Send RPM step-based report using 0x02 protocol for precise fan control
+static int send_rpm_step_report(uint8_t step)
+{
+	uint8_t report[8];  // 8 bytes for 0x02 protocol
+	int ret;
+	
+	if (!dev) {
+		printk(KERN_ERR "Lian li SL-Infinity hub: No HID device available\n");
+		return -ENODEV;
+	}
+	
+	// Build 8-byte HID report for 0x02 protocol
+	report[0] = 0x02;          // Report ID (0x02 for RPM step control)
+	report[1] = 0x00;          // Reserved
+	report[2] = 0x00;          // Reserved
+	report[3] = step;          // Step index (1-14)
+	report[4] = 0x00;          // Padding
+	report[5] = 0x00;          // Padding
+	report[6] = 0x00;          // Padding
+	report[7] = 0x00;          // Padding
+	
+	printk(KERN_INFO "Lian li SL-Infinity hub: Sending RPM step report: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	       report[0], report[1], report[2], report[3], report[4], report[5], report[6], report[7]);
+	
+	// Send HID Feature Report
+	ret = hid_hw_raw_request(dev, 0x02, report, 8, HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
+	if (ret < 0) {
+		printk(KERN_ERR "Lian li SL-Infinity hub: RPM step report failed: %d\n", ret);
+		return ret;
+	}
+	
+	printk(KERN_INFO "Lian li SL-Infinity hub: RPM step report sent successfully\n");
+	return 0;
+}
+
+// Lookup percentage for target RPM using calibration data with interpolation
+static int lookup_percent(int target_rpm)
+{
+	int i;
+	
+	// Clamp to valid range
+	if (target_rpm <= rpm_calibration[0].rpm) {
+		return rpm_calibration[0].percent;
+	}
+	if (target_rpm >= rpm_calibration[RPM_CALIBRATION_SIZE - 1].rpm) {
+		return rpm_calibration[RPM_CALIBRATION_SIZE - 1].percent;
+	}
+	
+	// Find the two calibration points to interpolate between
+	for (i = 0; i < RPM_CALIBRATION_SIZE - 1; i++) {
+		if (target_rpm <= rpm_calibration[i + 1].rpm) {
+			// Interpolate between map[i] and map[i+1]
+			int rpm0 = rpm_calibration[i].rpm;
+			int rpm1 = rpm_calibration[i + 1].rpm;
+			int pct0 = rpm_calibration[i].percent;
+			int pct1 = rpm_calibration[i + 1].percent;
+			
+			// Linear interpolation
+			return pct0 + (target_rpm - rpm0) * (pct1 - pct0) / (rpm1 - rpm0);
+		}
+	}
+	
+	// Fallback (shouldn't reach here)
+	return rpm_calibration[RPM_CALIBRATION_SIZE - 1].percent;
 }
 
 // Send fan profile command
@@ -322,23 +405,36 @@ static void set_lighting_effect(int effect, int speed, int brightness, int direc
 	send_lighting_effect_command(effect, speed, brightness, direction);
 }
 
-// Set fan speed (legacy function for compatibility)
+// Set fan speed using 0xE0 protocol with maximum performance tuning
 static void set_speed(int port, int new_speed)
 {
 	if (port < 0 || port >= 4) return;
 	
 	ports[port].fan_speed = new_speed;
 	
-	// Convert percentage to hex (0-100% -> 0x00-0x64)
-	uint8_t speed_hex = (new_speed * 0x64) / 100;
-	if (speed_hex > 0x64) speed_hex = 0x64;
+	// Convert percentage to target RPM (800-2100 RPM range)
+	int target_rpm = 800 + ((2100 - 800) * new_speed / 100);
+	if (target_rpm < 800) target_rpm = 800;
+	if (target_rpm > 2100) target_rpm = 2100;
 	
-	// Use QUIET profile (0x50) for fan speed control
-	// This is the correct mode for fan control according to protocol
-	send_hid_feature_report(PROFILE_QUIET, speed_hex, 0x00, 0x00);
+	// For maximum performance, use direct speed mapping instead of calibration
+	uint8_t speed_value;
+	if (new_speed == 100) {
+		speed_value = 0xFD;  // Try 0xFD (253) for sustained performance with all fans
+	} else {
+		// Use calibration for other speeds
+		speed_value = lookup_percent(target_rpm);
+	}
 	
-	printk(KERN_INFO "Lian li SL-Infinity hub: Set fan speed to %d%% (0x%02x) using QUIET profile\n", 
-	       new_speed, speed_hex);
+	// Use working 0xE0 protocol with Standard SP mode (0x20) for all fans
+	// Format: e0 20 00 XX 00 00 00 where XX is speed value
+	send_hid_feature_report(0x20, speed_value, 0x00, 0x00);
+	
+	// Update RPM tracking
+	ports[port].fan_speed_rpm = target_rpm;
+	
+	printk(KERN_INFO "Lian li SL-Infinity hub: Set fan speed to %d%% (target %d RPM, using 0x%02x) using optimized 0xE0 protocol\n", 
+	       new_speed, target_rpm, speed_value);
 }
 
 // Motherboard sync
