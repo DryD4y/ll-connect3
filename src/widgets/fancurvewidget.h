@@ -31,6 +31,7 @@ private:
     void drawCurve(QPainter &painter);
     void drawDataPoints(QPainter &painter);
     void drawCurrentLine(QPainter &painter);
+    QColor getTemperatureColor(int temperature);
     QPointF dataToPixel(const QPointF &dataPoint);
     QPointF pixelToData(const QPointF &pixelPoint);
     

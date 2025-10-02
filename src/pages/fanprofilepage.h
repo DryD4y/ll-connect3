@@ -27,8 +27,7 @@ public:
 
 private slots:
     void onProfileChanged();
-    void onApplyToAll();
-    void onDefault();
+    // Button functions removed - they weren't doing anything useful
     void onStartStopToggled();
     void updateFanData();
 
@@ -40,11 +39,22 @@ private:
     void updateFanCurve();
     void updateTemperature();
     void updateFanRPMs();
+    void updateCPULoad();
+    void updateGPULoad();
     int calculateRPMForTemperature(int temperature);
+    int calculateRPMForLoad(int temperature, int cpuLoad, int gpuLoad);
     int getRealCPUTemperature();
+    int getRealCPULoad();
+    int getRealGPULoad();
     QVector<int> getRealFanRPMs();
+    int getRealFanRPM(int port);
+    int convertPercentageToRPM(int percentage);
     void controlFanSpeeds();
     void setFanSpeed(int port, int speedPercent);
+    void detectConnectedPorts();
+    void updateFanTable();
+    bool isPortConnected(int port);
+    // Profile test function removed - no longer needed
     
     QVBoxLayout *m_mainLayout;
     QVBoxLayout *m_contentLayout;
@@ -72,20 +82,29 @@ private:
     QLabel *m_rpmLabel;
     QSpinBox *m_rpmSpinBox;
     
-    QPushButton *m_applyToAllBtn;
-    QPushButton *m_defaultBtn;
+    // Buttons removed - they weren't doing anything useful
     
     // Update timers
     QTimer *m_updateTimer;
     QTimer *m_tempUpdateTimer;
     QTimer *m_fanRPMTimer;
+    QTimer *m_cpuLoadTimer;
+    QTimer *m_gpuLoadTimer;
     
     // Cached temperature for real-time updates
     int m_cachedTemperature;
     int m_temperatureCounter;
     
+    // Cached CPU and GPU load
+    int m_cachedCPULoad;
+    int m_cachedGPULoad;
+    
     // Cached fan RPMs
     QVector<int> m_cachedFanRPMs;
+    
+    // Port detection
+    QVector<bool> m_portConnected;
+    QVector<int> m_activePorts;
     
     // HID controller for fan control
     LianLiSLInfinityController *m_hidController;

@@ -1,0 +1,638 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * ENE / Lian Li SL-Infinity Hub – Minimal Fan Control Driver
+ *
+ * - Binds to VID:PID 0x0CF2:0xA102
+ * - Exposes /proc/Lian_li_SL_INFINITY/Port_{1..4}/fan_speed (0..100)
+ * - Sends HID OUTPUT reports:
+ *      Port Select (E0 01 ... 12 bytes) then
+ *      Set Duty    (E0 20 ... 17 bytes)
+ *
+ * WARNING: This is a minimal control surface (no RPM readback here).
+ */
+
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+ #include <linux/hid.h>
+ #include <linux/delay.h>
+ #include <linux/proc_fs.h>
+ #include <linux/fs.h>
+ #include <linux/workqueue.h>
+ #include <linux/uaccess.h>
+ #include <linux/slab.h>
+ 
+ #define DRV_NAME        "Lian_Li_SL_INFINITY"
+ #define PROC_ROOT_NAME  "Lian_li_SL_INFINITY"
+ #define MAX_PORTS       4
+ 
+ #define ENE_VID 0x0CF2
+ #define ENE_PID 0xA102
+
+ /* transport_mode module param:
+  *  -1 = auto (default, try FEATURE then OUTPUT)
+  *   0 = force HID OUTPUT reports
+  *   1 = force HID FEATURE (SET_REPORT)
+  */
+static int transport_mode = -1;
+module_param(transport_mode, int, 0644);
+MODULE_PARM_DESC(transport_mode, "-1=auto (default), 0=HID OUTPUT, 1=HID FEATURE");
+
+ /* packet_mode module param:
+  *   0 = extended packets (Port Select 12B, Set Duty 17B) [default]
+  *   1 = compact packets  (Port Select 7B,  Set Duty 7B)
+  */
+static int packet_mode = 0;
+module_param(packet_mode, int, 0644);
+MODULE_PARM_DESC(packet_mode, "0=extended 12/17-byte (default), 1=compact 7-byte");
+
+/* selector encoding mode for Port Select:
+ *   0 = ordinal LE16 (01 00, 02 00, 03 00, 04 00)
+ *   1 = bitmask LE16 (01 00, 02 00, 04 00, 08 00)
+ */
+static int sel_bitmask = 0;
+module_param(sel_bitmask, int, 0644);
+MODULE_PARM_DESC(sel_bitmask, "0=ordinal (default), 1=bitmask (1,2,4,8)");
+
+ /* Telemetry poll interval (ms) */
+ static int poll_interval_ms = 1000;
+ module_param(poll_interval_ms, int, 0644);
+ MODULE_PARM_DESC(poll_interval_ms, "Telemetry poll interval in ms (default 1000)");
+ 
+struct sli_port {
+	 int                port_id;   /* 1..4 */
+	 struct proc_dir_entry *pde;   /* /proc/Lian_li.../Port_X/fan_speed */
+	 struct proc_dir_entry *pde_rpm; /* /proc/Lian_li.../Port_X/rpm */
+	 struct sli_dev    *parent;
+	 int                last_rpm;
+	 int                last_duty;
+};
+ 
+struct sli_dev {
+	 struct hid_device *hdev;
+	 struct proc_dir_entry *proc_root;
+	 struct proc_dir_entry *proc_port_dir[MAX_PORTS];
+	 struct sli_port       ports[MAX_PORTS];
+	 /* If your unit needs an init sequence, add state here */
+	 struct delayed_work   poll_work;
+	 int                   poll_ms;
+ 	 int                   last_get_rc;
+ 	 struct proc_dir_entry *pde_status;
+};
+ 
+ static const u8 sel_map[MAX_PORTS][2] = {
+	 /* Port -> selector LE bytes */
+	 {0x01, 0x00}, /* Port 1 */
+	 {0x02, 0x00}, /* Port 2 */
+	 {0x03, 0x00}, /* Port 3 */
+	 {0x04, 0x00}, /* Port 4 */
+ };
+ 
+ /* --- HID send helpers --------------------------------------------------- */
+
+ static int sli_send_feature(struct hid_device *hdev, const u8 *buf, size_t len)
+ {
+     int rc;
+     u8 tmp[64];
+
+     if (!buf || len == 0 || len > sizeof(tmp))
+         return -EINVAL;
+
+     memcpy(tmp, buf, len);
+     /* hid_hw_raw_request expects reportnum to match first byte */
+     rc = hid_hw_raw_request(hdev, tmp[0], tmp, len,
+                 HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
+     if (rc < 0) {
+         hid_err(hdev, "FEATURE SET_REPORT failed rc=%d len=%zu (first=0x%02x)\n", rc, len, buf[0]);
+         return rc;
+     }
+     return 0;
+ }
+
+static int sli_send_output(struct hid_device *hdev, const u8 *buf, size_t len)
+ {
+	 /* IMPORTANT: buf[0] must be ReportID (0xE0).
+	  * Try Interrupt OUT first; if the device has no OUT endpoint, fall back to
+	  * Control SET_REPORT (HID_OUTPUT_REPORT) without the ReportID byte. */
+	 int rc = hid_hw_output_report(hdev, (u8 *)buf, len);
+	 if (rc < 0) {
+		 int rc2;
+		 u8 tmp[64];
+		 size_t plen = (len > 0) ? len - 1 : 0;
+		 if (plen > sizeof(tmp))
+			 plen = sizeof(tmp);
+		 if (len > 0)
+			 memcpy(tmp, buf + 1, plen);
+		 hid_warn(hdev, "OUTPUT (int-out) failed rc=%d, trying control SET_REPORT (len=%zu, id=0x%02x)\n",
+			 rc, len, buf ? buf[0] : 0);
+		 rc2 = hid_hw_raw_request(hdev, buf ? buf[0] : 0, tmp, plen,
+					  HID_OUTPUT_REPORT, HID_REQ_SET_REPORT);
+		 if (rc2 < 0) {
+			 hid_err(hdev, "OUTPUT (control) failed rc=%d plen=%zu id=0x%02x\n", rc2, plen, buf ? buf[0] : 0);
+			 return rc2;
+		 }
+		 return 0;
+	 }
+	 return 0;
+ }
+
+ /* Auto-choose transport per module param (feature preferred in auto mode) */
+ static int sli_send_report(struct hid_device *hdev, const u8 *buf, size_t len)
+ {
+     int rc;
+     if (transport_mode == 0)
+         return sli_send_output(hdev, buf, len);
+     if (transport_mode == 1)
+         return sli_send_feature(hdev, buf, len);
+
+     /* auto: try FEATURE first, then fall back to OUTPUT */
+     rc = sli_send_feature(hdev, buf, len);
+     if (rc == 0)
+         return 0;
+     hid_info(hdev, "Falling back to HID OUTPUT for report 0x%02x\n", buf ? buf[0] : 0);
+     return sli_send_output(hdev, buf, len);
+ }
+
+ /* Retry wrapper to smooth over transient -EAGAIN/-ETIMEDOUT */
+static int sli_send_report_retry(struct hid_device *hdev, const u8 *buf, size_t len)
+ {
+     int rc, i;
+     for (i = 0; i < 3; i++) {
+         rc = sli_send_report(hdev, buf, len);
+         if (rc != -EAGAIN && rc != -ETIMEDOUT)
+             return rc;
+         msleep(10);
+     }
+     return rc;
+}
+
+/* Send a long 0xE0 report via 7-byte FEATURE frames (segmented).
+ * ext[] includes command as ext[0], followed by payload bytes. */
+/* Send a full E0 report (full[0]==0xE0, flen=12 or 17) as 7-byte HID OUTPUT
+ * frames: for i from 1 stepping by 6, send [0xE0] + full[i..i+5] (pad 0). */
+static int sli_send_e0_segmented(struct hid_device *hdev,
+                                 const u8 *full, size_t flen)
+{
+    size_t idx;
+    u8 seg[7];
+    int rc;
+
+    if (!full || flen < 2 || full[0] != 0xE0)
+        return -EINVAL;
+
+    for (idx = 1; idx < flen; idx += 6) {
+        size_t take = flen - idx;
+        if (take > 6) take = 6;
+        memset(seg, 0, sizeof(seg));
+        seg[0] = 0xE0;
+        memcpy(&seg[1], &full[idx], take);
+        hid_info(hdev, "E0 seg frame: %*ph\n", (int)sizeof(seg), seg);
+        rc = sli_send_output(hdev, seg, sizeof(seg));
+        if (rc)
+            return rc;
+        msleep(15);
+    }
+    return 0;
+}
+
+static int sli_port_select(struct sli_dev *sdev, int port)
+{
+	 if (port < 1) port = 1;
+	 if (port > MAX_PORTS) port = MAX_PORTS;
+
+    if (packet_mode == 1) {
+        /* Compact 7-byte variant */
+        u8 pkt7[7];
+        u8 sel_lo = sel_bitmask ? (1u << (port-1)) : sel_map[port-1][0];
+        u8 sel_hi = 0x00; /* all selectors we know fit in low byte */
+        pkt7[0] = 0xE0;
+        pkt7[1] = 0x01;
+        pkt7[2] = sel_lo;
+        pkt7[3] = sel_hi;
+        pkt7[4] = 0x00;
+        pkt7[5] = 0x00;
+        pkt7[6] = 0x00;
+        hid_info(sdev->hdev, "Port Select (len=%zu) P%d sel=%02x %02x: %*ph\n",
+                 sizeof(pkt7), port, sel_lo, sel_hi, (int)sizeof(pkt7), pkt7);
+        return sli_send_report_retry(sdev->hdev, pkt7, sizeof(pkt7));
+    }
+
+    /* Extended 12-byte variant (default) */
+    u8 pkt[12];
+    {
+        u8 sel_lo = sel_bitmask ? (1u << (port-1)) : sel_map[port-1][0];
+        u8 sel_hi = 0x00;
+
+        pkt[0]  = 0xE0;
+        pkt[1]  = 0x01;
+        pkt[2]  = sel_lo;  /* sel_lo */
+        pkt[3]  = sel_hi;  /* sel_hi */
+        pkt[4]  = 0x41;
+        pkt[5]  = 0x00;
+        pkt[6]  = 0x44;
+        pkt[7]  = 0x00;
+        pkt[8]  = 0x00;
+        pkt[9]  = 0x00;
+        pkt[10] = 0x06;
+        pkt[11] = 0x00;
+    }
+
+    hid_info(sdev->hdev, "Port Select (len=%zu) P%d: %*ph\n", sizeof(pkt), port, (int)sizeof(pkt), pkt);
+    /* Always send extended packets as segmented OUTPUT frames */
+    return sli_send_e0_segmented(sdev->hdev, pkt, sizeof(pkt));
+}
+ 
+static int sli_set_duty(struct sli_dev *sdev, int port, int duty_pct)
+{
+	 if (duty_pct < 0) duty_pct = 0;
+	 if (duty_pct > 100) duty_pct = 100;
+
+    if (packet_mode == 1) {
+        /* Compact 7-byte variant */
+        u8 pkt7[7];
+        u8 addr = (port < 1) ? 1 : (port > MAX_PORTS ? MAX_PORTS : port);
+        pkt7[0] = 0xE0;
+        pkt7[1] = 0x20;
+        pkt7[2] = addr;   /* address target port directly in 7B mode */
+        pkt7[3] = (u8)duty_pct;
+        pkt7[4] = 0x00;
+        pkt7[5] = 0x00;
+        pkt7[6] = 0x00;
+        hid_info(sdev->hdev, "Set Duty (len=%zu) P%d %d%%: %*ph\n",
+                 sizeof(pkt7), addr, duty_pct, (int)sizeof(pkt7), pkt7);
+        return sli_send_report_retry(sdev->hdev, pkt7, sizeof(pkt7));
+    }
+
+    /* Extended 17-byte variant (default) */
+    u8 pkt[17];
+    pkt[0]  = 0xE0;
+    pkt[1]  = 0x20;
+    pkt[2]  = 0x00;
+    pkt[3]  = (u8)duty_pct;
+    pkt[4]  = 0x00;
+    pkt[5]  = 0x00;
+    pkt[6]  = 0x00;
+    pkt[7]  = 0x00;
+    pkt[8]  = 0x4C;
+    pkt[9]  = 0x00;
+    pkt[10] = 0x00;
+    pkt[11] = 0x00;
+    pkt[12] = 0x06;
+    pkt[13] = 0x00;
+    pkt[14] = 0x00;
+    pkt[15] = 0x00;
+    pkt[16] = 0x3C;
+
+    hid_info(sdev->hdev, "Set Duty (len=%zu) %d%%: %*ph\n", sizeof(pkt), duty_pct, (int)sizeof(pkt), pkt);
+    /* Always send extended packets as segmented OUTPUT frames */
+    return sli_send_e0_segmented(sdev->hdev, pkt, sizeof(pkt));
+}
+ 
+ /* Composite op: select port, then set duty, with small delays */
+ static int sli_set_port_pct(struct sli_dev *sdev, int port, int pct)
+ {
+	 int rc;
+    rc = sli_port_select(sdev, port);
+    if (rc) return rc;
+    msleep(20);
+    rc = sli_set_duty(sdev, port, pct);
+    if (rc) return rc;
+    msleep(20);
+    return 0;
+}
+ 
+ /* --- /proc handlers ----------------------------------------------------- */
+ 
+ static ssize_t sli_write_fan_speed(struct file *file, const char __user *ubuf,
+ 					size_t len, loff_t *offp)
+ {
+ 	 struct sli_port *p = (struct sli_port *)pde_data(file_inode(file));
+	 char kbuf[32];
+	 long val;
+	 int rc;
+
+	 if (!p || !p->parent) return -ENODEV;
+	 if (len >= sizeof(kbuf)) len = sizeof(kbuf) - 1;
+ 
+	 if (copy_from_user(kbuf, ubuf, len))
+		 return -EFAULT;
+	 kbuf[len] = '\0';
+ 
+	 rc = kstrtol(kbuf, 10, &val);
+	 if (rc) return rc;
+ 
+	 if (val < 0) val = 0;
+	 if (val > 100) val = 100;
+ 
+	 hid_info(p->parent->hdev, "proc: set Port_%d fan_speed=%ld%%\n", p->port_id, val);
+	rc = sli_set_port_pct(p->parent, p->port_id, (int)val);
+	if (rc) {
+		 hid_err(p->parent->hdev, "set_port_pct failed rc=%d\n", rc);
+		 return rc;
+	 }
+
+	 WRITE_ONCE(p->last_duty, (int)val);
+
+	 return len;
+}
+ 
+static const struct proc_ops sli_proc_fops = {
+	 .proc_write = sli_write_fan_speed,
+};
+
+static ssize_t sli_read_rpm(struct file *file, char __user *ubuf,
+                            size_t len, loff_t *offp)
+{
+    struct sli_port *p = (struct sli_port *)pde_data(file_inode(file));
+    char buf[32];
+    int n;
+    int rpm;
+
+    if (!p || !p->parent)
+        return -ENODEV;
+
+    if (*offp)
+        return 0;
+
+    rpm = READ_ONCE(p->last_rpm);
+    n = scnprintf(buf, sizeof(buf), "%d\n", rpm);
+    if (n > len)
+        n = len;
+    if (copy_to_user(ubuf, buf, n))
+        return -EFAULT;
+    *offp = n;
+    return n;
+}
+
+static const struct proc_ops sli_proc_rpm_fops = {
+    .proc_read = sli_read_rpm,
+};
+
+/* Forward declarations for status proc so create_proc can reference it */
+static ssize_t sli_read_status(struct file *file, char __user *ubuf,
+                               size_t len, loff_t *offp);
+static const struct proc_ops sli_proc_status_fops;
+ 
+ static int sli_create_proc(struct sli_dev *sdev)
+ {
+	 int i;
+	 char name[64];
+ 
+    sdev->proc_root = proc_mkdir(PROC_ROOT_NAME, NULL);
+    if (!sdev->proc_root)
+        return -ENOMEM;
+
+    /* root status file */
+    sdev->pde_status = proc_create_data("status", 0444, sdev->proc_root,
+                                        &sli_proc_status_fops, sdev);
+    if (!sdev->pde_status)
+        return -ENOMEM;
+ 
+    for (i = 0; i < MAX_PORTS; i++) {
+        struct proc_dir_entry *dir;
+        snprintf(name, sizeof(name), "Port_%d", i+1);
+        dir = proc_mkdir(name, sdev->proc_root);
+        if (!dir) return -ENOMEM;
+        sdev->proc_port_dir[i] = dir;
+
+        sdev->ports[i].port_id = i+1;
+        sdev->ports[i].parent  = sdev;
+        sdev->ports[i].last_rpm = 0;
+        sdev->ports[i].last_duty = -1;
+
+        sdev->ports[i].pde = proc_create_data("fan_speed", 0222, dir,
+                                           &sli_proc_fops, &sdev->ports[i]);
+        if (!sdev->ports[i].pde)
+            return -ENOMEM;
+
+        hid_info(sdev->hdev, "Created /proc/%s/%s/fan_speed for port %d\n",
+                 PROC_ROOT_NAME, name, i+1);
+        sdev->ports[i].pde_rpm = proc_create_data("rpm", 0444, dir,
+                                                 &sli_proc_rpm_fops, &sdev->ports[i]);
+        if (!sdev->ports[i].pde_rpm)
+            return -ENOMEM;
+        hid_info(sdev->hdev, "Created /proc/%s/%s/rpm for port %d\n",
+                 PROC_ROOT_NAME, name, i+1);
+    }
+    return 0;
+}
+
+ static void sli_remove_proc(struct sli_dev *sdev)
+ {
+	 int i;
+    for (i = 0; i < MAX_PORTS; i++) {
+        if (sdev->ports[i].pde) {
+            proc_remove(sdev->ports[i].pde);
+            sdev->ports[i].pde = NULL;
+        }
+        if (sdev->ports[i].pde_rpm) {
+            proc_remove(sdev->ports[i].pde_rpm);
+            sdev->ports[i].pde_rpm = NULL;
+        }
+        if (sdev->proc_port_dir[i]) {
+            proc_remove(sdev->proc_port_dir[i]);
+            sdev->proc_port_dir[i] = NULL;
+        }
+    }
+    if (sdev->proc_root) {
+        if (sdev->pde_status) {
+            proc_remove(sdev->pde_status);
+            sdev->pde_status = NULL;
+        }
+        proc_remove(sdev->proc_root);
+        sdev->proc_root = NULL;
+    }
+ }
+
+ /* --- Optional device initialization sequence --------------------------- */
+static int init_variant = 0;
+module_param(init_variant, int, 0644);
+MODULE_PARM_DESC(init_variant, "0=E0 50 01..., E0 10 60 01 03..., 1=E0 50 00 01..., E0 10 00 60 01 00 00");
+
+static void sli_send_init_sequence(struct sli_dev *sdev)
+{
+    /* From captures: two short 0xE0 feature-style packets */
+    u8 pkt1[7];
+    u8 pkt2[7];
+    int rc;
+
+    if (init_variant == 0) {
+        u8 a[7] = {0xE0, 0x50, 0x01, 0x00, 0x00, 0x00, 0x00};
+        u8 b[7] = {0xE0, 0x10, 0x60, 0x01, 0x03, 0x00, 0x00};
+        memcpy(pkt1, a, 7);
+        memcpy(pkt2, b, 7);
+    } else {
+        u8 a[7] = {0xE0, 0x50, 0x00, 0x01, 0x00, 0x00, 0x00};
+        u8 b[7] = {0xE0, 0x10, 0x00, 0x60, 0x01, 0x00, 0x00};
+        memcpy(pkt1, a, 7);
+        memcpy(pkt2, b, 7);
+    }
+
+    hid_info(sdev->hdev, DRV_NAME ": init seq #1: %*ph\n", (int)sizeof(pkt1), pkt1);
+    rc = sli_send_report(sdev->hdev, pkt1, sizeof(pkt1));
+    if (rc)
+        hid_warn(sdev->hdev, "init #1 failed rc=%d (continuing)\n", rc);
+    msleep(15);
+
+    hid_info(sdev->hdev, DRV_NAME ": init seq #2: %*ph\n", (int)sizeof(pkt2), pkt2);
+    rc = sli_send_report(sdev->hdev, pkt2, sizeof(pkt2));
+    if (rc)
+        hid_warn(sdev->hdev, "init #2 failed rc=%d (continuing)\n", rc);
+    msleep(15);
+}
+
+/* --- Telemetry poller -------------------------------------------------- */
+static void sli_poll_workfn(struct work_struct *work)
+{
+    struct sli_dev *sdev = container_of(work, struct sli_dev, poll_work.work);
+    u8 buf[65];
+    int rc;
+
+    if (!sdev || !sdev->hdev)
+        return;
+
+    memset(buf, 0, sizeof(buf));
+    buf[0] = 0xE0; /* Report ID */
+    rc = hid_hw_raw_request(sdev->hdev, buf[0], buf, sizeof(buf),
+                            HID_FEATURE_REPORT, HID_REQ_GET_REPORT);
+    WRITE_ONCE(sdev->last_get_rc, rc);
+    if (rc >= 9 && buf[0] == 0xE0) {
+        int i;
+        for (i = 0; i < MAX_PORTS; i++) {
+            int off = 1 + 2*i;
+            if (off + 1 < rc) {
+                int rpm = buf[off] | (buf[off+1] << 8);
+                WRITE_ONCE(sdev->ports[i].last_rpm, rpm);
+            }
+        }
+    }
+
+    schedule_delayed_work(&sdev->poll_work, msecs_to_jiffies(sdev->poll_ms));
+}
+
+/* --- status proc -------------------------------------------------------- */
+static ssize_t sli_read_status(struct file *file, char __user *ubuf,
+                               size_t len, loff_t *offp)
+{
+    struct sli_dev *sdev = (struct sli_dev *)pde_data(file_inode(file));
+    char buf[256];
+    int n = 0, i;
+
+    if (!sdev)
+        return -ENODEV;
+
+    if (*offp)
+        return 0;
+
+    n += scnprintf(buf + n, sizeof(buf) - n,
+                   "transport_mode=%d\npacket_mode=%d\nsel_bitmask=%d\npoll_interval_ms=%d\nlast_get_rc=%d\n",
+                   transport_mode, packet_mode, sel_bitmask, sdev->poll_ms, READ_ONCE(sdev->last_get_rc));
+    for (i = 0; i < MAX_PORTS; i++) {
+        n += scnprintf(buf + n, sizeof(buf) - n,
+                       "port_%d: duty=%d rpm=%d\n",
+                       i+1,
+                       READ_ONCE(sdev->ports[i].last_duty),
+                       READ_ONCE(sdev->ports[i].last_rpm));
+    }
+
+    if (n > len)
+        n = len;
+    if (copy_to_user(ubuf, buf, n))
+        return -EFAULT;
+    *offp = n;
+    return n;
+}
+
+static const struct proc_ops sli_proc_status_fops = {
+    .proc_read = sli_read_status,
+};
+
+ /* --- HID driver glue ---------------------------------------------------- */
+ 
+ static int sli_probe(struct hid_device *hdev, const struct hid_device_id *id)
+ {
+	 int rc;
+	 struct sli_dev *sdev;
+ 
+	 hid_info(hdev, DRV_NAME ": HID device connected");
+ 
+	 rc = hid_parse(hdev);
+	 if (rc) {
+		 hid_err(hdev, "hid_parse failed rc=%d\n", rc);
+		 return rc;
+	 }
+ 	 rc = hid_hw_start(hdev, HID_CONNECT_HIDRAW);
+ 	 if (rc) {
+ 		 hid_err(hdev, "hid_hw_start failed rc=%d\n", rc);
+ 		 return rc;
+ 	 }
+ 
+    sdev = devm_kzalloc(&hdev->dev, sizeof(*sdev), GFP_KERNEL);
+	 if (!sdev) {
+		 rc = -ENOMEM;
+		 goto stop_hw;
+	 }
+	 sdev->hdev = hdev;
+	 hid_set_drvdata(hdev, sdev);
+
+    /* Optional: put hub into manual mode if your unit requires it.
+     * Send minimal init handshakes observed in captures. */
+    sli_send_init_sequence(sdev);
+
+    /* Open device for I/O */
+    rc = hid_hw_open(hdev);
+    if (rc) {
+        hid_err(hdev, "hid_hw_open failed rc=%d\n", rc);
+        goto stop_hw;
+    }
+
+    rc = sli_create_proc(sdev);
+    if (rc) {
+        hid_err(hdev, "proc setup failed rc=%d\n", rc);
+        goto stop_hw;
+    }
+
+    /* Start telemetry polling */
+    sdev->poll_ms = poll_interval_ms > 0 ? poll_interval_ms : 1000;
+    INIT_DELAYED_WORK(&sdev->poll_work, sli_poll_workfn);
+    schedule_delayed_work(&sdev->poll_work, msecs_to_jiffies(sdev->poll_ms));
+ 
+	 hid_info(hdev, DRV_NAME ": initialized successfully");
+	 return 0;
+ 
+ stop_hw:
+	 hid_hw_stop(hdev);
+	 return rc;
+ }
+ 
+ static void sli_remove(struct hid_device *hdev)
+ {
+	 struct sli_dev *sdev = hid_get_drvdata(hdev);
+	 hid_info(hdev, DRV_NAME ": removing");
+    if (sdev) {
+        sli_remove_proc(sdev);
+    }
+    cancel_delayed_work_sync(&sdev->poll_work);
+    hid_hw_close(hdev);
+    hid_hw_stop(hdev);
+}
+ 
+ static const struct hid_device_id sli_table[] = {
+	 { HID_USB_DEVICE(ENE_VID, ENE_PID) },
+	 { }
+ };
+ MODULE_DEVICE_TABLE(hid, sli_table);
+ 
+ static struct hid_driver sli_driver = {
+	 .name    = DRV_NAME,
+	 .id_table= sli_table,
+	 .probe   = sli_probe,
+	 .remove  = sli_remove,
+ };
+ 
+ module_hid_driver(sli_driver);
+ 
+ MODULE_AUTHOR("You");
+ MODULE_DESCRIPTION("ENE / Lian Li SL-Infinity Minimal Fan Control HID Driver");
+ MODULE_LICENSE("GPL");
+ 

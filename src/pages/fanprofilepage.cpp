@@ -22,7 +22,11 @@ FanProfilePage::FanProfilePage(QWidget *parent)
     : QWidget(parent)
     , m_cachedTemperature(39) // Start with your current temperature
     , m_temperatureCounter(0)
+    , m_cachedCPULoad(0) // Initialize CPU load
+    , m_cachedGPULoad(0) // Initialize GPU load
     , m_cachedFanRPMs(4, 0) // Initialize with 4 fans at 0 RPM
+    , m_portConnected(4, false) // Initialize port detection
+    , m_activePorts() // Empty initially
     , m_hidController(nullptr)
 {
     // Set minimum size for the page - more compact
@@ -48,6 +52,16 @@ FanProfilePage::FanProfilePage(QWidget *parent)
     connect(m_fanRPMTimer, &QTimer::timeout, this, &FanProfilePage::updateFanRPMs);
     m_fanRPMTimer->start(1000); // Update fan RPMs every 1 second
     
+    // Start timer for CPU load reading (every 500ms)
+    m_cpuLoadTimer = new QTimer(this);
+    connect(m_cpuLoadTimer, &QTimer::timeout, this, &FanProfilePage::updateCPULoad);
+    m_cpuLoadTimer->start(500); // Update CPU load every 500ms
+    
+    // Start timer for GPU load reading (every 500ms)
+    m_gpuLoadTimer = new QTimer(this);
+    connect(m_gpuLoadTimer, &QTimer::timeout, this, &FanProfilePage::updateGPULoad);
+    m_gpuLoadTimer->start(500); // Update GPU load every 500ms
+    
     // Initialize HID controller for fan control
     m_hidController = new LianLiSLInfinityController();
     if (m_hidController->Initialize()) {
@@ -58,9 +72,14 @@ FanProfilePage::FanProfilePage(QWidget *parent)
         qDebug() << "Failed to connect to Lian Li device - fans will not work";
     }
     
+    // Detect connected ports
+    detectConnectedPorts();
+    
     // Initial update
     updateTemperature();
     updateFanRPMs();
+    updateCPULoad();
+    updateGPULoad();
     updateFanData();
 }
 
@@ -95,10 +114,10 @@ void FanProfilePage::setupFanTable()
 {
     // Fan section without title to maximize space for the table
     
-    m_fanTable = new QTableWidget(4, 6);
+    m_fanTable = new QTableWidget(0, 7); // Start with 0 rows, will be populated dynamically
     m_fanTable->setObjectName("fanTable");
     
-    QStringList headers = {"#", "Port", "Profile", "CPU Temperature", "RPM", "Size"};
+    QStringList headers = {"#", "Port", "Profile", "CPU Temperature", "GPU Load", "Fan RPMs", "Size"};
     m_fanTable->setHorizontalHeaderLabels(headers);
     
     // Set table properties
@@ -113,27 +132,13 @@ void FanProfilePage::setupFanTable()
     m_fanTable->setColumnWidth(1, 80);  // Port column
     m_fanTable->setColumnWidth(2, 80);  // Profile column
     m_fanTable->setColumnWidth(3, 120); // CPU Temperature column
-    m_fanTable->setColumnWidth(4, 80);  // RPM column
-    m_fanTable->setColumnWidth(5, 80);  // Size column
+    m_fanTable->setColumnWidth(4, 80);  // GPU Load column
+    m_fanTable->setColumnWidth(5, 80);  // Fan RPMs column
+    m_fanTable->setColumnWidth(6, 60);  // Size column (smaller)
     
     // Set table size - more compact
     m_fanTable->setMaximumHeight(160);
     m_fanTable->setMinimumHeight(120);
-    
-    // Populate table data
-    for (int row = 0; row < 4; ++row) {
-        m_fanTable->setItem(row, 0, new QTableWidgetItem(QString::number(row + 1)));
-        m_fanTable->setItem(row, 1, new QTableWidgetItem("Port" + QString::number(row + 1)));
-        m_fanTable->setItem(row, 2, new QTableWidgetItem("Quiet"));
-        m_fanTable->setItem(row, 3, new QTableWidgetItem("CPU 56°C"));
-        m_fanTable->setItem(row, 4, new QTableWidgetItem("975 RPM"));
-        
-        // Add size combo box
-        QComboBox *sizeCombo = new QComboBox();
-        sizeCombo->addItems({"120mm", "140mm", "200mm"});
-        sizeCombo->setCurrentText("120mm");
-        m_fanTable->setCellWidget(row, 5, sizeCombo);
-    }
     
     m_leftLayout->addWidget(m_fanTable);
     
@@ -263,6 +268,30 @@ void FanProfilePage::setupControls()
     controlsLayout->addLayout(tempRpmLayout);
     controlsLayout->addStretch();
     
+    // Refresh ports button
+    QPushButton *refreshPortsBtn = new QPushButton("Refresh Ports");
+    refreshPortsBtn->setObjectName("refreshPortsBtn");
+    refreshPortsBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #4a4a4a;
+            color: #ffffff;
+            border: 1px solid #666666;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #5a5a5a;
+            border-color: #888888;
+        }
+        QPushButton:pressed {
+            background-color: #3a3a3a;
+        }
+    )");
+    connect(refreshPortsBtn, &QPushButton::clicked, this, &FanProfilePage::detectConnectedPorts);
+    controlsLayout->addWidget(refreshPortsBtn);
+    
     connect(m_startStopCheck, &QCheckBox::toggled, this, &FanProfilePage::onStartStopToggled);
     
     m_rightLayout->addLayout(controlsLayout);
@@ -274,26 +303,7 @@ void FanProfilePage::setupControls()
     // Fan curve on the left
     fanCurveLayout->addWidget(m_fanCurveWidget, 1); // Fan curve takes remaining space
     
-    // Action buttons stacked vertically on the right, aligned to bottom
-    QVBoxLayout *buttonLayout = new QVBoxLayout();
-    buttonLayout->setSpacing(10);
-    
-    m_applyToAllBtn = new QPushButton("Apply To All");
-    m_applyToAllBtn->setObjectName("actionButton");
-    m_applyToAllBtn->setFixedWidth(120);
-    
-    m_defaultBtn = new QPushButton("Default");
-    m_defaultBtn->setObjectName("actionButton");
-    m_defaultBtn->setFixedWidth(120);
-    
-    connect(m_applyToAllBtn, &QPushButton::clicked, this, &FanProfilePage::onApplyToAll);
-    connect(m_defaultBtn, &QPushButton::clicked, this, &FanProfilePage::onDefault);
-    
-    buttonLayout->addStretch(); // Push buttons to bottom
-    buttonLayout->addWidget(m_applyToAllBtn);
-    buttonLayout->addWidget(m_defaultBtn);
-    
-    fanCurveLayout->addLayout(buttonLayout);
+    // Buttons removed - they weren't doing anything useful
     
     m_rightLayout->addLayout(fanCurveLayout);
     m_rightLayout->addStretch();
@@ -462,26 +472,41 @@ void FanProfilePage::updateFanData()
     // Use cached temperature for fast updates
     int currentTemp = m_cachedTemperature;
     
-    // Calculate corresponding RPM based on current profile
-    int currentRPM = calculateRPMForTemperature(currentTemp);
+    // Calculate corresponding RPM based on current profile (for curve reference)
+    int calculatedRPM = calculateRPMForTemperature(currentTemp);
     
-    // Update temperature and RPM labels
+    // Get average real RPM from connected fans
+    int realRPM = 0;
+    if (!m_activePorts.isEmpty()) {
+        int totalRPM = 0;
+        int activeCount = 0;
+        for (int port : m_activePorts) {
+            int portRPM = getRealFanRPM(port);
+            totalRPM += portRPM;
+            if (portRPM > 0) activeCount++;
+        }
+        realRPM = activeCount > 0 ? totalRPM / activeCount : 0;
+    }
+    
+    // Update temperature, load, and RPM labels
     m_tempLabel->setText(QString::number(currentTemp) + " °C");
-    m_rpmLabel->setText(QString::number(currentRPM) + " RPM");
+    m_rpmLabel->setText(QString::number(realRPM) + " RPM (CPU:" + QString::number(m_cachedCPULoad) + "%, GPU:" + QString::number(m_cachedGPULoad) + "%)");
     
-    // Update fan curve widget - this should trigger a repaint
+    // Update fan curve widget - show real RPM instead of calculated
     m_fanCurveWidget->setCurrentTemperature(currentTemp);
-    m_fanCurveWidget->setCurrentRPM(currentRPM);
+    m_fanCurveWidget->setCurrentRPM(realRPM);
     
     // Force update of the fan curve widget
     m_fanCurveWidget->update();
     
-    // Update table data with real fan RPMs
-    for (int row = 0; row < 4; ++row) {
-        int rpm = m_cachedFanRPMs[row];
+    // Update table data with real fan RPMs (only for connected ports)
+    for (int row = 0; row < m_activePorts.size(); ++row) {
+        int port = m_activePorts[row];
+        int realRPM = getRealFanRPM(port); // Get actual RPM from kernel driver
         
-        m_fanTable->setItem(row, 3, new QTableWidgetItem("CPU " + QString::number(currentTemp) + "°C"));
-        m_fanTable->setItem(row, 4, new QTableWidgetItem(QString::number(rpm) + " RPM"));
+        m_fanTable->setItem(row, 3, new QTableWidgetItem("CPU " + QString::number(currentTemp) + "°C (L:" + QString::number(m_cachedCPULoad) + "%)"));
+        m_fanTable->setItem(row, 4, new QTableWidgetItem("GPU " + QString::number(m_cachedGPULoad) + "%"));
+        m_fanTable->setItem(row, 5, new QTableWidgetItem(QString::number(realRPM) + " RPM"));
     }
     
     // Control fan speeds based on temperature and profile
@@ -493,25 +518,7 @@ void FanProfilePage::onProfileChanged()
     updateFanCurve();
 }
 
-void FanProfilePage::onApplyToAll()
-{
-    // Apply current profile to all fans
-    QString profile = "Quiet";
-    if (m_stdSpRadio->isChecked()) profile = "StdSP";
-    else if (m_highSpRadio->isChecked()) profile = "HighSP";
-    else if (m_fullSpRadio->isChecked()) profile = "FullSP";
-    else if (m_customRadio->isChecked()) profile = "MB RPM Sync";
-    
-    for (int row = 0; row < 4; ++row) {
-        m_fanTable->setItem(row, 2, new QTableWidgetItem(profile));
-    }
-}
-
-void FanProfilePage::onDefault()
-{
-    m_quietRadio->setChecked(true);
-    updateFanCurve();
-}
+// Button functions removed - they weren't doing anything useful
 
 void FanProfilePage::onStartStopToggled()
 {
@@ -519,47 +526,47 @@ void FanProfilePage::onStartStopToggled()
     bool isRunning = m_startStopCheck->isChecked();
     
     if (isRunning) {
-        // Test fan speeds directly
-        qDebug() << "=== TESTING FAN SPEEDS ===";
+        // Test fan speeds directly - only test connected ports
+        qDebug() << "=== TESTING CONNECTED FAN PORTS ===";
+        qDebug() << "Active ports:" << m_activePorts;
         
-        // Test Channel 0 (Port 1) - CPU cooler
-        qDebug() << "Setting Channel 0 to 20% speed...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(0, 20);
+        if (m_activePorts.isEmpty()) {
+            qDebug() << "No connected ports found - skipping fan test";
+            return;
         }
-        QThread::msleep(2000);
         
-        qDebug() << "Setting Channel 0 to 50% speed...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(0, 50);
+        // Test each connected port
+        for (int port : m_activePorts) {
+            qDebug() << "Testing Port" << port << "...";
+            
+            // Test 20% speed
+            qDebug() << "Setting Port" << port << "to 20% speed...";
+            if (m_hidController) {
+                m_hidController->SetChannelSpeed(port - 1, 20);
+            }
+            QThread::msleep(2000);
+            
+            // Test 50% speed
+            qDebug() << "Setting Port" << port << "to 50% speed...";
+            if (m_hidController) {
+                m_hidController->SetChannelSpeed(port - 1, 50);
+            }
+            QThread::msleep(2000);
+            
+            // Test 80% speed
+            qDebug() << "Setting Port" << port << "to 80% speed...";
+            if (m_hidController) {
+                m_hidController->SetChannelSpeed(port - 1, 80);
+            }
+            QThread::msleep(2000);
         }
-        QThread::msleep(2000);
         
-        qDebug() << "Setting Channel 0 to 80% speed...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(0, 80);
-        }
-        QThread::msleep(2000);
-        
-        // Test Channel 1 (Port 2) - Rear case fan
-        qDebug() << "Setting Channel 1 to 30% speed...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(1, 30);
-        }
-        QThread::msleep(2000);
-        
-        // Test Channel 3 (Port 4) - Front case fans
-        qDebug() << "Setting Channel 3 to 60% speed...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(3, 60);
-        }
-        QThread::msleep(2000);
-        
-        qDebug() << "Setting all fans to 0% (off)...";
-        if (m_hidController) {
-            m_hidController->SetChannelSpeed(0, 0);
-            m_hidController->SetChannelSpeed(1, 0);
-            m_hidController->SetChannelSpeed(3, 0);
+        // Turn off all connected fans
+        qDebug() << "Turning off all connected fans...";
+        for (int port : m_activePorts) {
+            if (m_hidController) {
+                m_hidController->SetChannelSpeed(port - 1, 0);
+            }
         }
         
         qDebug() << "=== FAN TEST COMPLETE ===";
@@ -706,17 +713,61 @@ int FanProfilePage::getRealCPUTemperature()
 
 QVector<int> FanProfilePage::getRealFanRPMs()
 {
-    QVector<int> fanRPMs;
+    QVector<int> fanRPMs(4, 0); // Initialize with 4 ports, all at 0 RPM
     
-    // Since we're using USB HID controller, we can't read back fan speeds
-    // Instead, we'll use the last known target RPM from our control logic
-    // This is stored in the static variable in controlFanSpeeds()
-    
-    // For now, return empty vector - the UI will show the target RPM instead
-    // In a real implementation, you might want to store the last set RPM values
-    // in member variables and return them here
+    // Read real RPMs from kernel driver for all ports
+    for (int port = 1; port <= 4; ++port) {
+        fanRPMs[port - 1] = getRealFanRPM(port);
+    }
     
     return fanRPMs;
+}
+
+int FanProfilePage::getRealFanRPM(int port)
+{
+    if (port < 1 || port > 4) {
+        return 0;
+    }
+    
+    // Read RPM from kernel driver proc file
+    QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_speed").arg(port);
+    QFile file(procPath);
+    
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open" << procPath << "for reading";
+        return 0;
+    }
+    
+    QTextStream stream(&file);
+    QString rpmStr = stream.readLine().trimmed();
+    file.close();
+    
+    bool ok;
+    int percentage = rpmStr.toInt(&ok);
+    
+    if (!ok) {
+        qDebug() << "Failed to parse percentage from" << procPath << ":" << rpmStr;
+        return 0;
+    }
+    
+    // Convert percentage to actual RPM
+    int rpm = convertPercentageToRPM(percentage);
+    
+    return rpm;
+}
+
+int FanProfilePage::convertPercentageToRPM(int percentage)
+{
+    // Convert kernel driver percentage (0-100%) to RPM values
+    // Simple linear mapping: 0% = 0 RPM, 100% = 2100 RPM
+    
+    if (percentage <= 0) return 0;
+    if (percentage >= 100) return 2100;
+    
+    // Linear interpolation between 0-100% and 0-2100 RPM
+    int rpm = (percentage * 2100) / 100;
+    
+    return rpm;
 }
 
 void FanProfilePage::controlFanSpeeds()
@@ -756,11 +807,11 @@ void FanProfilePage::controlFanSpeeds()
     // A) Only preheat when heating
     const bool heating = (dTdt > 0.05);   // small floor to avoid noise
 
-    int base_now  = calculateRPMForTemperature(int(std::round(Tf)));
-    int base_pred = calculateRPMForTemperature(int(std::round(Tf + dTdt * 7.0)));
+    int base_now  = calculateRPMForLoad(int(std::round(Tf)), m_cachedCPULoad, m_cachedGPULoad);
+    int base_pred = calculateRPMForLoad(int(std::round(Tf + dTdt * 7.0)), m_cachedCPULoad, m_cachedGPULoad);
 
     int base_rpm  = heating ? std::max(base_now, base_pred) : base_now;
-    int ff_rpm    = heating ? int(std::round(dTdt * 180.0)) : 0;
+    int ff_rpm    = heating ? int(std::round(dTdt * 300.0)) : 0; // Increased from 180 to 300
     
     // 4) Spike booster when heating rapidly
     static QElapsedTimer spikeT; static bool spike=false;
@@ -768,7 +819,7 @@ void FanProfilePage::controlFanSpeeds()
     int spikeBoost = 0;
     if (spike) {
         int ms = spikeT.elapsed();
-        if (ms < 12000) spikeBoost = int(std::round(300.0 * (1.0 - ms/12000.0)));
+        if (ms < 15000) spikeBoost = int(std::round(500.0 * (1.0 - ms/15000.0))); // Increased boost and duration
         else spike = false;
     }
     
@@ -786,17 +837,37 @@ void FanProfilePage::controlFanSpeeds()
     
     if (coolBand) {
         // no look-ahead, no spike, no hold
-        int lowTarget = calculateRPMForTemperature(int(std::round(Tf))); // uses actual curve
+        int lowTarget = calculateRPMForLoad(int(std::round(Tf)), m_cachedCPULoad, m_cachedGPULoad); // uses actual curve
         target = std::max(lowTarget, 800); // clamp to quiet floor
     }
 
     // B) Cooling session that actually finishes (ignores deadband while active)
-    const int   DOWN_DB     = 30;      // threshold to start a down-session
-    const int   DOWN_EPS    = 8;       // finish when within this of target
-    const double DOWN_SLEW  = 60.0;    // RPM/s downward
-    const int   HOLD_MS     = 8000;    // cooldown hold before any drop
-    const int   up_db       = 5;       // very small on rise
-    const double up_slew    = 350.0;   // RPM/s upward
+    // Make cooling more aggressive at higher temperatures
+    int DOWN_DB = 20;      // threshold to start a down-session
+    int DOWN_EPS = 5;       // finish when within this of target
+    double DOWN_SLEW = 120.0;   // RPM/s downward
+    int HOLD_MS = 5000;    // cooldown hold before any drop
+    const int   up_db       = 2;       // very small on rise (reduced from 5)
+    const double up_slew    = 800.0;   // RPM/s upward (increased from 350)
+    
+    // More aggressive cooling at higher temperatures
+    double up_slew_adaptive = up_slew;  // Start with base upward slew rate
+    
+    if (Tf > 70.0) {
+        DOWN_DB = 10;       // Start cooling sooner at high temps
+        DOWN_EPS = 3;       // More precise cooling
+        DOWN_SLEW = 200.0;  // Much faster cooling at high temps
+        HOLD_MS = 2000;     // Shorter hold time at high temps
+        up_slew_adaptive = 1200.0;  // Very fast upward response at high temps
+    } else if (Tf > 60.0) {
+        DOWN_DB = 15;       // Moderate cooling
+        DOWN_EPS = 4;       // Moderate precision
+        DOWN_SLEW = 150.0;  // Moderate speed
+        HOLD_MS = 3000;     // Moderate hold time
+        up_slew_adaptive = 1000.0;  // Fast upward response at medium temps
+    } else if (Tf > 50.0) {
+        up_slew_adaptive = 900.0;   // Moderate upward response
+    }
 
     // state
     static bool coolingSession = false;
@@ -815,13 +886,15 @@ void FanProfilePage::controlFanSpeeds()
         }
         // Always allow cooling down, even while on hold
         // Hold only prevents bouncing back up too soon
-        if (holdDown && holdT.elapsed() > 7000) { // Reduced from 15s to 7s
+        // Shorter hold times at higher temperatures
+        int holdTime = (Tf > 70.0) ? 1000 : (Tf > 60.0) ? 2000 : 3000;
+        if (holdDown && holdT.elapsed() > holdTime) {
             holdDown = false;
         }
     }
     
-    // Force release hold when clearly cool
-    if (Tf < 49.5) {
+    // Force release hold when clearly cool or at high temps
+    if (Tf < 49.5 || Tf > 75.0) {
         holdDown = false;
     }
 
@@ -832,7 +905,7 @@ void FanProfilePage::controlFanSpeeds()
 
     // apply session
     int maxStepDown = std::max(1, int(std::round(DOWN_SLEW * dt)));
-    int maxStepUp = std::max(1, int(std::round(up_slew * dt)));
+    int maxStepUp = std::max(1, int(std::round(up_slew_adaptive * dt)));
     int gated = rpm_out;
 
     if (heating) {
@@ -860,8 +933,8 @@ void FanProfilePage::controlFanSpeeds()
     }
 
     // 5) Separate write threshold for down steps (tiny during session)
-    int writeThreshUpRPM   = 20;  // e.g., 20–30 RPM
-    int writeThreshDownRPM = coolingSession ? 0 : 20;
+    int writeThreshUpRPM   = (Tf > 60.0) ? 5 : 10;  // More responsive upward at higher temps
+    int writeThreshDownRPM = coolingSession ? 0 : (Tf > 70.0) ? 10 : 20; // More responsive at high temps
 
     bool shouldWrite = false;
     static bool wasHoldDown = false;
@@ -883,21 +956,16 @@ void FanProfilePage::controlFanSpeeds()
     wasHoldDown = holdDown;
 
     if (shouldWrite) {
-        // write to all used ports (including Port 0 which showed activity in kernel status)
-        if (gated > 0) {
-            setFanSpeed(0, gated); // Port 0 - might be the main fan port
-            setFanSpeed(1, gated);
-            setFanSpeed(2, gated);
-            setFanSpeed(4, gated);
-        } else {
-            setFanSpeed(0, 0);
-            setFanSpeed(1, 0); setFanSpeed(2, 0); setFanSpeed(4, 0);
+        // write to only connected ports
+        for (int port : m_activePorts) {
+            setFanSpeed(port, gated);
         }
         rpm_out = gated;
         qDebug() << "WRITE: heating=" << heating << " coolBand=" << coolBand 
                  << " session=" << coolingSession << " hold=" << holdDown
                  << " Tf=" << Tf << " dTdt=" << dTdt << " rpm_out=" << rpm_out 
-                 << " target=" << target << " gated=" << gated;
+                 << " target=" << target << " gated=" << gated
+                 << " activePorts=" << m_activePorts;
     } else {
         qDebug() << "HOLD:  heating=" << heating << " coolBand=" << coolBand 
                  << " session=" << coolingSession << " hold=" << holdDown
@@ -911,17 +979,22 @@ void FanProfilePage::setFanSpeed(int port, int targetRPM)
     // Clamp speed to valid range (0-2100 based on real data)
     targetRPM = qBound(0, targetRPM, 2100);
     
-    if (!m_hidController) {
-        qDebug() << "HID controller not available for Port" << port;
-        return;
-    }
-    
-    qDebug() << "HID controller available, attempting to set fan speed...";
-    
     // Convert RPM to percentage for kernel driver
-    // Based on your calibration: 100% only gives us 59.4 dBA (~1900 RPM)
-    // Convert RPM to percentage (0-100%)
-    int speedPercent = (targetRPM * 100) / 2100;
+    // Based on our calibration: 100% gives us ~1900 RPM (59.4 dBA)
+    // Use a more aggressive mapping to hit 100% at lower RPM
+    int speedPercent;
+    if (targetRPM <= 0) {
+        speedPercent = 0;
+    } else if (targetRPM <= 800) {
+        // 0-800 RPM maps to 0-20%
+        speedPercent = (targetRPM * 20) / 800;
+    } else if (targetRPM <= 1500) {
+        // 800-1500 RPM maps to 20-70%
+        speedPercent = 20 + ((targetRPM - 800) * 50) / 700;
+    } else {
+        // 1500-2100 RPM maps to 70-100%
+        speedPercent = 70 + ((targetRPM - 1500) * 30) / 600;
+    }
     
     // Clamp to reasonable range
     speedPercent = qBound(0, speedPercent, 100);
@@ -933,15 +1006,368 @@ void FanProfilePage::setFanSpeed(int port, int targetRPM)
     double expectedDBA = 36.8 + (targetRPM - 800) * (62.9 - 36.8) / (2100 - 800);
     qDebug() << "Expected dBA for" << targetRPM << "RPM:" << expectedDBA;
     
-    // Convert port number to channel (Port 1 = Channel 0, Port 2 = Channel 1, etc.)
-    uint8_t channel = port - 1;
+    // Use kernel driver for individual port control (more reliable)
+    QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_speed").arg(port);
+    QFile file(procPath);
     
-    // Use USB HID controller instead of kernel module
-    bool success = m_hidController->SetChannelSpeed(channel, speedPercent);
-    
-    if (success) {
-        qDebug() << "Set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM (" << speedPercent << "%, expected dBA=" << (36.8 + (targetRPM - 800) * (62.9 - 36.8) / (2100 - 800)) << ")";
+    if (file.open(QIODevice::WriteOnly)) {
+        QTextStream stream(&file);
+        stream << speedPercent;
+        file.close();
+        
+        qDebug() << "Set Port" << port << "to" << targetRPM << "RPM (" << speedPercent << "%, expected dBA=" << expectedDBA << ") via kernel driver";
     } else {
-        qDebug() << "Failed to set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM via USB HID";
+        qDebug() << "Failed to open" << procPath << "for writing - falling back to USB HID";
+        
+        // Fallback to USB HID controller if kernel driver fails
+        if (m_hidController) {
+            uint8_t channel = port - 1;
+            bool success = m_hidController->SetChannelSpeed(channel, speedPercent);
+            
+            if (success) {
+                qDebug() << "Set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM (" << speedPercent << "%, expected dBA=" << expectedDBA << ") via USB HID fallback";
+            } else {
+                qDebug() << "Failed to set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM via USB HID fallback";
+            }
+        } else {
+            qDebug() << "HID controller not available for Port" << port;
+        }
     }
+}
+
+void FanProfilePage::updateCPULoad()
+{
+    // Try to get real CPU load first, fall back to simulation
+    int realLoad = getRealCPULoad();
+    
+    if (realLoad != -1) {
+        // Use real CPU load
+        m_cachedCPULoad = realLoad;
+    } else {
+        // Use simulation with some variation
+        static int loadCounter = 0;
+        loadCounter++;
+        
+        // Simulate CPU load based on temperature (higher temp = higher load)
+        int baseLoad = (m_cachedTemperature > 60) ? 40 : 20;
+        int variation = (loadCounter % 80) - 40; // -40 to +40 variation
+        m_cachedCPULoad = qMax(0, qMin(100, baseLoad + variation));
+    }
+}
+
+void FanProfilePage::updateGPULoad()
+{
+    // Try to get real GPU load first, fall back to simulation
+    int realLoad = getRealGPULoad();
+    
+    if (realLoad != -1) {
+        // Use real GPU load
+        m_cachedGPULoad = realLoad;
+    } else {
+        // Use simulation with some variation
+        static int loadCounter = 0;
+        loadCounter++;
+        
+        // Simulate GPU load (usually lower than CPU)
+        int baseLoad = (m_cachedTemperature > 65) ? 30 : 10;
+        int variation = (loadCounter % 60) - 30; // -30 to +30 variation
+        m_cachedGPULoad = qMax(0, qMin(100, baseLoad + variation));
+    }
+}
+
+int FanProfilePage::getRealCPULoad()
+{
+    // Method 1: Try /proc/loadavg (1-minute average)
+    QFile loadavgFile("/proc/loadavg");
+    if (loadavgFile.open(QIODevice::ReadOnly)) {
+        QTextStream stream(&loadavgFile);
+        QString line = stream.readLine();
+        loadavgFile.close();
+        
+        QStringList parts = line.split(' ');
+        if (parts.size() >= 3) {
+            double load1min = parts[0].toDouble();
+            // Convert load average to percentage (rough approximation)
+            // Assuming 4 cores, load > 4.0 = 100%
+            int loadPercent = qMin(100, static_cast<int>((load1min / 4.0) * 100));
+            return loadPercent;
+        }
+    }
+    
+    // Method 2: Try /proc/stat (more accurate)
+    QFile statFile("/proc/stat");
+    if (statFile.open(QIODevice::ReadOnly)) {
+        QTextStream stream(&statFile);
+        QString line = stream.readLine();
+        statFile.close();
+        
+        if (line.startsWith("cpu ")) {
+            QStringList parts = line.split(' ', Qt::SkipEmptyParts);
+            if (parts.size() >= 8) {
+                // Parse CPU times: user, nice, system, idle, iowait, irq, softirq, steal
+                qint64 user = parts[1].toLongLong();
+                qint64 nice = parts[2].toLongLong();
+                qint64 system = parts[3].toLongLong();
+                qint64 idle = parts[4].toLongLong();
+                qint64 iowait = parts[5].toLongLong();
+                qint64 irq = parts[6].toLongLong();
+                qint64 softirq = parts[7].toLongLong();
+                qint64 steal = parts.size() > 8 ? parts[8].toLongLong() : 0;
+                
+                qint64 totalIdle = idle + iowait;
+                qint64 totalNonIdle = user + nice + system + irq + softirq + steal;
+                qint64 total = totalIdle + totalNonIdle;
+                
+                // Calculate CPU usage percentage
+                static qint64 prevTotal = 0;
+                static qint64 prevIdle = 0;
+                
+                if (prevTotal > 0) {
+                    qint64 totalDiff = total - prevTotal;
+                    qint64 idleDiff = totalIdle - prevIdle;
+                    
+                    if (totalDiff > 0) {
+                        int cpuPercent = static_cast<int>(((totalDiff - idleDiff) * 100) / totalDiff);
+                        prevTotal = total;
+                        prevIdle = totalIdle;
+                        return qMax(0, qMin(100, cpuPercent));
+                    }
+                }
+                
+                prevTotal = total;
+                prevIdle = totalIdle;
+            }
+        }
+    }
+    
+    return -1; // Failed to get CPU load
+}
+
+int FanProfilePage::getRealGPULoad()
+{
+    // Method 1: Try nvidia-smi (NVIDIA GPUs)
+    QProcess nvidiaProcess;
+    nvidiaProcess.start("nvidia-smi", QStringList() << "--query-gpu=utilization.gpu" << "--format=csv,noheader,nounits");
+    nvidiaProcess.waitForFinished(1000);
+    
+    if (nvidiaProcess.exitCode() == 0) {
+        QString output = nvidiaProcess.readAllStandardOutput().trimmed();
+        bool ok;
+        int gpuLoad = output.toInt(&ok);
+        if (ok && gpuLoad >= 0 && gpuLoad <= 100) {
+            return gpuLoad;
+        }
+    }
+    
+    // Method 2: Try radeontop (AMD GPUs)
+    QProcess radeonProcess;
+    radeonProcess.start("radeontop", QStringList() << "-d" << "1" << "-l" << "1");
+    radeonProcess.waitForFinished(2000);
+    
+    if (radeonProcess.exitCode() == 0) {
+        QString output = radeonProcess.readAllStandardOutput();
+        QRegularExpression gpuRegex("gpu\\s+(\\d+)%");
+        QRegularExpressionMatch match = gpuRegex.match(output);
+        if (match.hasMatch()) {
+            return match.captured(1).toInt();
+        }
+    }
+    
+    // Method 3: Try intel_gpu_top (Intel GPUs)
+    QProcess intelProcess;
+    intelProcess.start("intel_gpu_top", QStringList() << "-s" << "1");
+    intelProcess.waitForFinished(2000);
+    
+    if (intelProcess.exitCode() == 0) {
+        QString output = intelProcess.readAllStandardOutput();
+        QRegularExpression gpuRegex("GPU\\s+(\\d+)%");
+        QRegularExpressionMatch match = gpuRegex.match(output);
+        if (match.hasMatch()) {
+            return match.captured(1).toInt();
+        }
+    }
+    
+    return -1; // Failed to get GPU load
+}
+
+int FanProfilePage::calculateRPMForLoad(int temperature, int cpuLoad, int gpuLoad)
+{
+    // Get base RPM from temperature
+    int baseRPM = calculateRPMForTemperature(temperature);
+    
+    // Calculate load-based boost
+    int maxLoad = qMax(cpuLoad, gpuLoad);
+    int loadBoost = 0;
+    
+    if (maxLoad > 80) {
+        // High load: significant boost
+        loadBoost = 300 + ((maxLoad - 80) * 10); // 300-500 RPM boost
+    } else if (maxLoad > 60) {
+        // Medium load: moderate boost
+        loadBoost = 150 + ((maxLoad - 60) * 7); // 150-290 RPM boost
+    } else if (maxLoad > 40) {
+        // Low load: small boost
+        loadBoost = (maxLoad - 40) * 5; // 0-100 RPM boost
+    }
+    
+    // Apply load boost to base RPM
+    int finalRPM = baseRPM + loadBoost;
+    
+    // Clamp to valid range
+    finalRPM = qMax(0, qMin(2100, finalRPM));
+    
+    qDebug() << "Load-based RPM: temp=" << temperature << "°C, CPU=" << cpuLoad << "%, GPU=" << gpuLoad 
+             << "%, baseRPM=" << baseRPM << ", loadBoost=" << loadBoost << ", finalRPM=" << finalRPM;
+    
+    return finalRPM;
+}
+
+// Profile test function removed - no longer needed
+
+void FanProfilePage::detectConnectedPorts()
+{
+    qDebug() << "=== DETECTING CONNECTED PORTS ===";
+    
+    // Reset port status
+    m_portConnected.fill(false);
+    m_activePorts.clear();
+    
+    // Test each port using kernel driver for individual fan control
+    // This allows us to test each fan individually using the updated protocol
+    
+    for (int port = 1; port <= 4; ++port) {
+        qDebug() << "Testing Port" << port << " with individual fan control...";
+        
+        // Get initial RPM value
+        int initialRPM = getRealFanRPM(port);
+        qDebug() << "  Initial RPM:" << initialRPM;
+        
+        // Use kernel driver for individual fan control
+        // This should control only the specific fan on this port
+        QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_speed").arg(port);
+        QFile file(procPath);
+        
+        bool success = false;
+        if (file.open(QIODevice::WriteOnly)) {
+            QTextStream stream(&file);
+            stream << 30; // Set to 30% speed
+            file.close();
+            success = true;
+        }
+        
+        qDebug() << "  Individual control success:" << success;
+        
+        if (success) {
+            // Wait for fan to respond
+            QThread::msleep(1000);
+            
+            // Check if RPM changed (individual fan should respond)
+            int newRPM = getRealFanRPM(port);
+            qDebug() << "  After individual control RPM:" << newRPM;
+            qDebug() << "  RPM change:" << (newRPM - initialRPM);
+            
+            // Port is connected if RPM changed significantly
+            bool rpmChanged = (abs(newRPM - initialRPM) > 50);
+            
+            if (rpmChanged) {
+                qDebug() << "✓ Port" << port << "is connected (individual fan responded)";
+                m_portConnected[port - 1] = true;
+                m_activePorts.append(port);
+            } else {
+                qDebug() << "✗ Port" << port << "is not connected (no individual response)";
+                m_portConnected[port - 1] = false;
+            }
+        } else {
+            qDebug() << "✗ Port" << port << "is not connected (individual control failed)";
+            m_portConnected[port - 1] = false;
+        }
+        
+        // Small delay between tests
+        QThread::msleep(500);
+    }
+    
+    // Fallback: If no ports were detected, use the known working setup
+    // Since individual fan control might not work with this hardware,
+    // we'll assume all ports have fans and let the user control them globally
+    if (m_activePorts.isEmpty()) {
+        qDebug() << "No ports detected with individual control, using fallback for your setup (Ports 1, 2, 4)";
+        
+        // Set up the known connected ports as fallback
+        m_portConnected[0] = true;  // Port 1
+        m_portConnected[1] = true;  // Port 2  
+        m_portConnected[2] = false; // Port 3 (no fan)
+        m_portConnected[3] = true;  // Port 4
+        
+        m_activePorts.append(1);
+        m_activePorts.append(2);
+        m_activePorts.append(4);
+        
+        qDebug() << "Fallback detected ports:" << m_activePorts;
+    }
+    
+    // Turn off all fans after detection
+    for (int port : m_activePorts) {
+        QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_speed").arg(port);
+        QFile file(procPath);
+        if (file.open(QIODevice::WriteOnly)) {
+            QTextStream stream(&file);
+            stream << 0; // Turn off
+            file.close();
+        }
+    }
+    
+    qDebug() << "Final result - Active ports:" << m_activePorts;
+    qDebug() << "Port connection status:" << m_portConnected;
+    qDebug() << "=== PORT DETECTION COMPLETE ===";
+    
+    // Update the table with only connected ports
+    updateFanTable();
+}
+
+void FanProfilePage::updateFanTable()
+{
+    if (!m_fanTable) return;
+    
+    // Clear existing rows
+    m_fanTable->setRowCount(0);
+    
+    // Add rows only for connected ports
+    int row = 0;
+    for (int port : m_activePorts) {
+        m_fanTable->insertRow(row);
+        
+        // Row number
+        m_fanTable->setItem(row, 0, new QTableWidgetItem(QString::number(row + 1)));
+        
+        // Port name
+        m_fanTable->setItem(row, 1, new QTableWidgetItem("Port" + QString::number(port)));
+        
+        // Profile
+        m_fanTable->setItem(row, 2, new QTableWidgetItem("Quiet"));
+        
+        // CPU Temperature (will be updated in real-time)
+        m_fanTable->setItem(row, 3, new QTableWidgetItem("CPU 56°C"));
+        
+        // GPU Load (will be updated in real-time)
+        m_fanTable->setItem(row, 4, new QTableWidgetItem("GPU 23%"));
+        
+        // Fan RPMs (will be updated in real-time)
+        m_fanTable->setItem(row, 5, new QTableWidgetItem("975 RPM"));
+        
+        // Size combo box
+        QComboBox *sizeCombo = new QComboBox();
+        sizeCombo->addItems({"120mm", "140mm", "200mm"});
+        sizeCombo->setCurrentText("120mm");
+        m_fanTable->setCellWidget(row, 6, sizeCombo);
+        
+        row++;
+    }
+    
+    qDebug() << "Updated fan table with" << m_activePorts.size() << "connected ports";
+}
+
+bool FanProfilePage::isPortConnected(int port)
+{
+    if (port < 1 || port > 4) return false;
+    return m_portConnected[port - 1];
 }

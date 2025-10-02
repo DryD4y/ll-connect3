@@ -235,30 +235,54 @@ void FanCurveWidget::drawDataPoints(QPainter &painter)
     }
 }
 
+QColor FanCurveWidget::getTemperatureColor(int temperature)
+{
+    if (temperature <= 41) {
+        // 0-41°C: Blue (cool)
+        return QColor(0, 150, 255);
+    } else if (temperature <= 60) {
+        // 42-60°C: Green (normal)
+        return QColor(0, 255, 0);
+    } else if (temperature <= 76) {
+        // 61-76°C: Yellow (warm)
+        return QColor(255, 255, 0);
+    } else {
+        // 77-100°C: Red (hot)
+        return QColor(255, 0, 0);
+    }
+}
+
 void FanCurveWidget::drawCurrentLine(QPainter &painter)
 {
     QRect graphRect = rect().adjusted(m_marginLeft, m_marginTop, -m_marginRight, -m_marginBottom);
     
-    // Draw vertical green line at current temperature
+    // Calculate color based on temperature
+    QColor lineColor = getTemperatureColor(m_currentTemperature);
+    
+    // Draw vertical line at current temperature
     int x = graphRect.left() + (m_currentTemperature - m_tempMin) / (m_tempMax - m_tempMin) * graphRect.width();
     
     // Draw a thicker, more prominent line
-    painter.setPen(QPen(m_currentLineColor, 3));
+    painter.setPen(QPen(lineColor, 3));
     painter.drawLine(x, graphRect.top(), x, graphRect.bottom());
     
     // Draw a small circle at the intersection with the curve
     QPointF curvePoint = QPointF(x, graphRect.bottom() - (m_currentRPM - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height());
-    painter.setPen(QPen(m_currentLineColor, 2));
-    painter.setBrush(QBrush(m_currentLineColor));
+    painter.setPen(QPen(lineColor, 2));
+    painter.setBrush(QBrush(lineColor));
     painter.drawEllipse(curvePoint, 6, 6);
     
-    // Draw temperature label at the top
-    painter.setPen(QPen(m_currentLineColor, 1));
+    // Draw temperature label to the right of the line
+    painter.setPen(QPen(lineColor, 1));
     QFont font = painter.font();
     font.setPointSize(8);
     font.setBold(true);
     painter.setFont(font);
-    painter.drawText(x - 20, graphRect.top() - 5, 40, 15, Qt::AlignCenter, QString::number(m_currentTemperature) + "°C");
+    
+    // Position label to the right of the line, vertically centered
+    int labelX = x + 8; // 8 pixels to the right of the line
+    int labelY = graphRect.top() + (graphRect.height() / 2) - 7; // Vertically centered
+    painter.drawText(labelX, labelY, 40, 15, Qt::AlignLeft | Qt::AlignVCenter, QString::number(m_currentTemperature) + "°C");
 }
 
 QPointF FanCurveWidget::dataToPixel(const QPointF &dataPoint)

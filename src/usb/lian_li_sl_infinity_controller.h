@@ -118,6 +118,10 @@ public:
     bool SetChannelBrightness(uint8_t channel, uint8_t brightness);
     bool SetChannelFanCount(uint8_t channel, uint8_t count);
     
+    // Fan speed reading (kernel driver)
+    bool GetChannelSpeed(uint8_t channel, uint8_t& speed);
+    bool IsKernelDriverAvailable() const;
+    
     // Synchronization
     bool Synchronize();
 
