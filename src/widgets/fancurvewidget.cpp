@@ -266,23 +266,47 @@ void FanCurveWidget::drawCurrentLine(QPainter &painter)
     painter.setPen(QPen(lineColor, 3));
     painter.drawLine(x, graphRect.top(), x, graphRect.bottom());
     
-    // Draw a small circle at the intersection with the curve
-    QPointF curvePoint = QPointF(x, graphRect.bottom() - (m_currentRPM - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height());
+    // Calculate the RPM that should be on the curve at this temperature
+    int curveRPM = calculateRPMForTemperature(m_currentTemperature);
+    
+    // Draw a larger circle at the intersection with the curve (temperature ball)
+    QPointF curvePoint = QPointF(x, graphRect.bottom() - (curveRPM - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height());
     painter.setPen(QPen(lineColor, 2));
     painter.setBrush(QBrush(lineColor));
-    painter.drawEllipse(curvePoint, 6, 6);
+    painter.drawEllipse(curvePoint, 7, 7); // Increased from 6 to 7 (about 17% larger)
     
-    // Draw temperature label to the right of the line
-    painter.setPen(QPen(lineColor, 1));
-    QFont font = painter.font();
-    font.setPointSize(8);
-    font.setBold(true);
-    painter.setFont(font);
+    // Draw a fixed orange center dot (not moving)
+    QColor rpmColor = QColor(255, 165, 0); // Orange color
+    painter.setPen(QPen(rpmColor, 2));
+    painter.setBrush(QBrush(rpmColor));
+    painter.drawEllipse(curvePoint, 4, 4); // Fixed at the same position as temperature ball
     
-    // Position label to the right of the line, vertically centered
-    int labelX = x + 8; // 8 pixels to the right of the line
-    int labelY = graphRect.top() + (graphRect.height() / 2) - 7; // Vertically centered
-    painter.drawText(labelX, labelY, 40, 15, Qt::AlignLeft | Qt::AlignVCenter, QString::number(m_currentTemperature) + "°C");
+    // Temperature label removed - shown in table above instead
+    
+    // Draw legend inside the graph area on the left side
+    painter.setPen(QPen(Qt::white, 1));
+    QFont legendFont = painter.font();
+    legendFont.setPointSize(7);
+    legendFont.setBold(false);
+    painter.setFont(legendFont);
+    
+    // Position legend inside the graph area, around 0-15°C and 1000-1500 RPM range
+    int legendX = graphRect.left() + 20;  // Inside the graph, 20px from left edge
+    int legendY = graphRect.top() + 60;   // Moved up by 20px from previous position
+    
+    // Temperature ball legend
+    painter.setPen(QPen(lineColor, 2));
+    painter.setBrush(QBrush(lineColor));
+    painter.drawEllipse(legendX, legendY, 6, 6);
+    painter.setPen(QPen(Qt::white, 1));
+    painter.drawText(legendX + 10, legendY + 4, 80, 15, Qt::AlignLeft | Qt::AlignVCenter, "Temp Target");
+    
+    // Fixed orange dot legend
+    painter.setPen(QPen(rpmColor, 2));
+    painter.setBrush(QBrush(rpmColor));
+    painter.drawEllipse(legendX, legendY + 20, 6, 6);
+    painter.setPen(QPen(Qt::white, 1));
+    painter.drawText(legendX + 10, legendY + 24, 80, 15, Qt::AlignLeft | Qt::AlignVCenter, "Fan Status");
 }
 
 QPointF FanCurveWidget::dataToPixel(const QPointF &dataPoint)
@@ -343,4 +367,34 @@ void FanCurveWidget::mouseReleaseEvent(QMouseEvent *event)
     Q_UNUSED(event)
     m_dragging = false;
     m_draggedPoint = -1;
+}
+
+int FanCurveWidget::calculateRPMForTemperature(int temperature)
+{
+    // Calculate RPM based on the current curve profile
+    if (m_curvePoints.size() < 2) {
+        return 0;
+    }
+    
+    // Find the two points that bracket the temperature
+    for (int i = 0; i < m_curvePoints.size() - 1; ++i) {
+        double temp1 = m_curvePoints[i].x();
+        double rpm1 = m_curvePoints[i].y();
+        double temp2 = m_curvePoints[i + 1].x();
+        double rpm2 = m_curvePoints[i + 1].y();
+        
+        if (temperature >= temp1 && temperature <= temp2) {
+            // Linear interpolation between the two points
+            double ratio = (temperature - temp1) / (temp2 - temp1);
+            double rpm = rpm1 + ratio * (rpm2 - rpm1);
+            return static_cast<int>(rpm);
+        }
+    }
+    
+    // If temperature is outside the curve range, use the closest point
+    if (temperature <= m_curvePoints.first().x()) {
+        return static_cast<int>(m_curvePoints.first().y());
+    } else {
+        return static_cast<int>(m_curvePoints.last().y());
+    }
 }

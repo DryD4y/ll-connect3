@@ -1,4 +1,8 @@
 #include "settingspage.h"
+#include <QSettings>
+#include <QFile>
+#include <QTextStream>
+#include <QDebug>
 
 SettingsPage::SettingsPage(QWidget *parent)
     : QWidget(parent)
@@ -6,6 +10,9 @@ SettingsPage::SettingsPage(QWidget *parent)
     setupUI();
     setupGeneralSettings();
     setupServiceSettings();
+    setupFanConfiguration();
+    setupDebugSettings();
+    loadFanConfiguration();
     applySettings();
 }
 
@@ -357,5 +364,195 @@ void SettingsPage::onResetAll()
     m_temperatureCombo->setCurrentText("Celsius");
     m_delaySpinBox->setValue(3);
     
+    // Reset fan configuration to all enabled
+    m_fanPort1Check->setChecked(true);
+    m_fanPort2Check->setChecked(true);
+    m_fanPort3Check->setChecked(true);
+    m_fanPort4Check->setChecked(true);
+    
     applySettings();
+}
+
+void SettingsPage::setupFanConfiguration()
+{
+    m_fanConfigGroup = new QGroupBox("Fan Port Configuration");
+    m_fanConfigGroup->setObjectName("settingsGroup");
+    
+    QVBoxLayout *fanLayout = new QVBoxLayout(m_fanConfigGroup);
+    fanLayout->setSpacing(15);
+    
+    // Description label
+    QLabel *descLabel = new QLabel("Select which ports have fans connected:");
+    descLabel->setObjectName("settingsLabel");
+    descLabel->setWordWrap(true);
+    fanLayout->addWidget(descLabel);
+    
+    // Port checkboxes
+    m_fanPort1Check = new QCheckBox("Port 1");
+    m_fanPort1Check->setObjectName("settingsCheck");
+    m_fanPort1Check->setChecked(true);
+    connect(m_fanPort1Check, &QCheckBox::toggled, [this](bool checked) {
+        onFanPortToggled(1, checked);
+    });
+    
+    m_fanPort2Check = new QCheckBox("Port 2");
+    m_fanPort2Check->setObjectName("settingsCheck");
+    m_fanPort2Check->setChecked(true);
+    connect(m_fanPort2Check, &QCheckBox::toggled, [this](bool checked) {
+        onFanPortToggled(2, checked);
+    });
+    
+    m_fanPort3Check = new QCheckBox("Port 3");
+    m_fanPort3Check->setObjectName("settingsCheck");
+    m_fanPort3Check->setChecked(true);
+    connect(m_fanPort3Check, &QCheckBox::toggled, [this](bool checked) {
+        onFanPortToggled(3, checked);
+    });
+    
+    m_fanPort4Check = new QCheckBox("Port 4");
+    m_fanPort4Check->setObjectName("settingsCheck");
+    m_fanPort4Check->setChecked(true);
+    connect(m_fanPort4Check, &QCheckBox::toggled, [this](bool checked) {
+        onFanPortToggled(4, checked);
+    });
+    
+    fanLayout->addWidget(m_fanPort1Check);
+    fanLayout->addWidget(m_fanPort2Check);
+    fanLayout->addWidget(m_fanPort3Check);
+    fanLayout->addWidget(m_fanPort4Check);
+    
+    // Info label
+    QLabel *infoLabel = new QLabel("Note: The hardware cannot auto-detect fans. Please configure manually.");
+    infoLabel->setObjectName("infoLabel");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #888888; font-size: 11px; font-style: italic;");
+    fanLayout->addWidget(infoLabel);
+    
+    m_rightLayout->addWidget(m_fanConfigGroup);
+}
+
+void SettingsPage::onFanPortToggled(int port, bool enabled)
+{
+    // Write to kernel driver immediately
+    QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_config").arg(port);
+    QFile file(procPath);
+    
+    if (file.open(QIODevice::WriteOnly)) {
+        QTextStream stream(&file);
+        stream << (enabled ? "1" : "0");
+        file.close();
+        qDebug() << "Fan port" << port << "set to" << (enabled ? "enabled" : "disabled");
+    } else {
+        qWarning() << "Failed to configure fan port" << port << ":" << file.errorString();
+    }
+    
+    // Save to settings for persistence
+    saveFanConfiguration();
+}
+
+void SettingsPage::loadFanConfiguration()
+{
+    // Load from QSettings
+    QSettings settings("LianLi", "LConnect3");
+    
+    // Load saved configuration, default to all enabled
+    bool port1 = settings.value("FanConfig/Port1", true).toBool();
+    bool port2 = settings.value("FanConfig/Port2", true).toBool();
+    bool port3 = settings.value("FanConfig/Port3", true).toBool();
+    bool port4 = settings.value("FanConfig/Port4", true).toBool();
+    
+    // Block signals while setting initial state to avoid triggering writes
+    m_fanPort1Check->blockSignals(true);
+    m_fanPort2Check->blockSignals(true);
+    m_fanPort3Check->blockSignals(true);
+    m_fanPort4Check->blockSignals(true);
+    
+    m_fanPort1Check->setChecked(port1);
+    m_fanPort2Check->setChecked(port2);
+    m_fanPort3Check->setChecked(port3);
+    m_fanPort4Check->setChecked(port4);
+    
+    m_fanPort1Check->blockSignals(false);
+    m_fanPort2Check->blockSignals(false);
+    m_fanPort3Check->blockSignals(false);
+    m_fanPort4Check->blockSignals(false);
+    
+    // Apply to kernel driver
+    for (int port = 1; port <= 4; ++port) {
+        bool enabled = false;
+        switch (port) {
+            case 1: enabled = port1; break;
+            case 2: enabled = port2; break;
+            case 3: enabled = port3; break;
+            case 4: enabled = port4; break;
+        }
+        
+        QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_config").arg(port);
+        QFile file(procPath);
+        
+        if (file.open(QIODevice::WriteOnly)) {
+            QTextStream stream(&file);
+            stream << (enabled ? "1" : "0");
+            file.close();
+        }
+    }
+}
+
+void SettingsPage::saveFanConfiguration()
+{
+    QSettings settings("LianLi", "LConnect3");
+    
+    settings.setValue("FanConfig/Port1", m_fanPort1Check->isChecked());
+    settings.setValue("FanConfig/Port2", m_fanPort2Check->isChecked());
+    settings.setValue("FanConfig/Port3", m_fanPort3Check->isChecked());
+    settings.setValue("FanConfig/Port4", m_fanPort4Check->isChecked());
+    
+    settings.sync();
+}
+
+void SettingsPage::setupDebugSettings()
+{
+    m_debugGroup = new QGroupBox("Developer Settings");
+    m_debugGroup->setObjectName("settingsGroup");
+    
+    QVBoxLayout *debugLayout = new QVBoxLayout(m_debugGroup);
+    debugLayout->setSpacing(15);
+    
+    // Description label
+    QLabel *descLabel = new QLabel("Debug and diagnostic options:");
+    descLabel->setObjectName("settingsLabel");
+    descLabel->setWordWrap(true);
+    debugLayout->addWidget(descLabel);
+    
+    // Debug mode checkbox
+    m_debugModeCheck = new QCheckBox("Enable Debug Mode");
+    m_debugModeCheck->setObjectName("settingsCheck");
+    
+    // Load current setting
+    QSettings settings("LianLi", "LConnect3");
+    bool debugEnabled = settings.value("Debug/Enabled", false).toBool();
+    m_debugModeCheck->setChecked(debugEnabled);
+    
+    connect(m_debugModeCheck, &QCheckBox::toggled, [](bool checked) {
+        QSettings settings("LianLi", "LConnect3");
+        settings.setValue("Debug/Enabled", checked);
+        settings.sync();
+        
+        if (checked) {
+            qDebug() << "Debug mode enabled - verbose logging active";
+        } else {
+            qDebug() << "Debug mode disabled - minimal logging";
+        }
+    });
+    
+    debugLayout->addWidget(m_debugModeCheck);
+    
+    // Info label
+    QLabel *infoLabel = new QLabel("When enabled, detailed diagnostic information will be printed to the console. Requires application restart to take full effect.");
+    infoLabel->setObjectName("infoLabel");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #888888; font-size: 11px; font-style: italic;");
+    debugLayout->addWidget(infoLabel);
+    
+    m_leftLayout->addWidget(m_debugGroup);
 }

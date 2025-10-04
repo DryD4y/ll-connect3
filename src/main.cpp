@@ -5,12 +5,52 @@
 #include <QFont>
 #include <QIcon>
 #include <QDebug>
+#include <QSettings>
 #include "mainwindow.h"
+
+// Custom message handler to filter debug output based on settings
+void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    // Check if debug mode is enabled
+    QSettings settings("LianLi", "LConnect3");
+    bool debugEnabled = settings.value("Debug/Enabled", false).toBool();
+    
+    // Always show warnings, critical messages, and fatal errors
+    if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) {
+        QByteArray localMsg = msg.toLocal8Bit();
+        const char *file = context.file ? context.file : "";
+        const char *function = context.function ? context.function : "";
+        switch (type) {
+        case QtWarningMsg:
+            fprintf(stderr, "Warning: %s\n", localMsg.constData());
+            break;
+        case QtCriticalMsg:
+            fprintf(stderr, "Critical: %s\n", localMsg.constData());
+            break;
+        case QtFatalMsg:
+            fprintf(stderr, "Fatal: %s\n", localMsg.constData());
+            abort();
+        default:
+            break;
+        }
+        return;
+    }
+    
+    // Only show debug/info messages if debug mode is enabled
+    if (debugEnabled) {
+        QByteArray localMsg = msg.toLocal8Bit();
+        fprintf(stdout, "%s\n", localMsg.constData());
+        fflush(stdout);
+    }
+}
 
 int main(int argc, char *argv[])
 {
     // High DPI scaling is enabled by default in Qt6
     QApplication app(argc, argv);
+    
+    // Install custom message handler to control debug output
+    qInstallMessageHandler(customMessageHandler);
     
     // Set application properties
     app.setApplicationName("L-Connect 3");

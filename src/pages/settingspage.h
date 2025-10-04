@@ -30,12 +30,17 @@ private slots:
     void onServiceDelayChanged();
     void onApplyServiceDelay();
     void onResetAll();
+    void onFanPortToggled(int port, bool enabled);
 
 private:
     void setupUI();
     void setupGeneralSettings();
     void setupServiceSettings();
+    void setupFanConfiguration();
+    void setupDebugSettings();
     void applySettings();
+    void loadFanConfiguration();
+    void saveFanConfiguration();
     
     QVBoxLayout *m_mainLayout;
     QHBoxLayout *m_headerLayout;
@@ -64,6 +69,17 @@ private:
     QLabel *m_delayLabel;
     QSpinBox *m_delaySpinBox;
     QPushButton *m_applyDelayBtn;
+    
+    // Fan configuration
+    QGroupBox *m_fanConfigGroup;
+    QCheckBox *m_fanPort1Check;
+    QCheckBox *m_fanPort2Check;
+    QCheckBox *m_fanPort3Check;
+    QCheckBox *m_fanPort4Check;
+    
+    // Debug settings
+    QGroupBox *m_debugGroup;
+    QCheckBox *m_debugModeCheck;
     
     // Action buttons
     QPushButton *m_resetAllBtn;

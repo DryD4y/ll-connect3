@@ -87,7 +87,7 @@ ls -la /proc/Lian_li_SL_INFINITY/
 
 ## 🧪 Testing
 
-**📖 For detailed testing instructions, see: [kernel/README.md](kernel/README.md)**
+**📖 For detailed testing instructions, see: [kernel/INSTALL.md](kernel/INSTALL.md)**
 
 ### Quick Test
 

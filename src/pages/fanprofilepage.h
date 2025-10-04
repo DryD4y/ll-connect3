@@ -51,10 +51,10 @@ private:
     int convertPercentageToRPM(int percentage);
     void controlFanSpeeds();
     void setFanSpeed(int port, int speedPercent);
-    void detectConnectedPorts();
     void updateFanTable();
     bool isPortConnected(int port);
-    // Profile test function removed - no longer needed
+    QColor getTemperatureColor(int temperature);
+    // Fan detection functions removed - configuration is now in Settings
     
     QVBoxLayout *m_mainLayout;
     QVBoxLayout *m_contentLayout;

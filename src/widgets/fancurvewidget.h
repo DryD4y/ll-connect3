@@ -34,6 +34,7 @@ private:
     QColor getTemperatureColor(int temperature);
     QPointF dataToPixel(const QPointF &dataPoint);
     QPointF pixelToData(const QPointF &pixelPoint);
+    int calculateRPMForTemperature(int temperature);
     
     QString m_profile;
     int m_currentTemperature;

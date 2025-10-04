@@ -33,7 +33,9 @@ CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
 Testing/
-Makefile
+# Ignore CMake-generated Makefiles, but not kernel Makefile
+/Makefile
+/build/Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json

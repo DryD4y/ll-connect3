@@ -383,44 +383,18 @@ bool LianLiSLInfinityController::SetChannelSpeed(uint8_t channel, uint8_t speed)
         return false;
     }
 
-    // For individual fan control, we need to use the 0xE0 protocol with mode 0x21 (High SP)
-    // This allows us to control each fan individually as per the protocol documentation
-    if (m_handle)
-    {
-        // Use direct HID control with 0xE0 protocol, mode 0x21 for individual fan control
-        // According to protocol documentation, mode 0x21 controls individual fans
-        // We need to figure out how to specify which specific fan/port to control
+    // Use kernel driver for fan control (more reliable than direct HID)
+    std::string procPath = "/proc/Lian_li_SL_INFINITY/Port_" + std::to_string(channel + 1) + "/fan_speed";
+    
+    std::ofstream file(procPath);
+    if (file.is_open()) {
+        file << (int)speed;
+        file.close();
         
-        uint8_t report[7];
-        report[0] = 0xE0;  // Report ID
-        report[1] = 0x21;  // Mode 0x21 (High SP - individual fan control)
-        report[2] = 0x00;  // Reserved
-        report[3] = speed; // Speed (0-100%)
-        
-        // Try different approaches to specify which fan to control
-        // Method 1: Use brightness field to specify fan selector
-        report[4] = channel + 1;  // Fan selector (1-4 for ports 1-4)
-        report[5] = 0x00;  // Direction (not used for fans)
-        report[6] = 0x00;  // Reserved
-        
-        std::cout << "Sending individual fan control: Port " << (channel + 1) << " = " << (int)speed << "% (0xE0, 0x21, fan=" << (int)(channel + 1) << ")" << std::endl;
-        
-        // Send HID report
-        int result = hid_write(m_handle, report, 7);
-        if (result == 7)
-        {
-            std::cout << "Successfully set Port " << (channel + 1) << " to " << (int)speed << "% via individual HID control" << std::endl;
-            return true;
-        }
-        else
-        {
-            std::cout << "Failed to send HID report for Port " << (channel + 1) << " (result=" << result << ")" << std::endl;
-            return false;
-        }
-    }
-    else
-    {
-        std::cout << "HID device not available for individual fan control" << std::endl;
+        std::cout << "Successfully set Port " << (channel + 1) << " to " << (int)speed << "% via kernel driver" << std::endl;
+        return true;
+    } else {
+        std::cout << "Failed to open " << procPath << " for writing" << std::endl;
         return false;
     }
 }
@@ -511,6 +485,6 @@ bool LianLiSLInfinityController::GetChannelSpeed(uint8_t channel, uint8_t& speed
 bool LianLiSLInfinityController::IsKernelDriverAvailable() const
 {
     // Check if the kernel driver's /proc directory exists
-    std::ifstream file("/proc/Lian_li_SL_INFINITY/status");
+    std::ifstream file("/proc/Lian_li_SL_INFINITY/Port_1/fan_speed");
     return file.good();
 }
