@@ -16,6 +16,9 @@ public:
     void setValue(int value);
     int value() const;
     void setRange(int min, int max);
+    void setTickInterval(int interval);
+    void setPageStep(int step);
+    void setSnapToIncrements(bool enabled, int increment = 25);
 
 signals:
     void valueChanged(int value);
@@ -32,6 +35,8 @@ private:
     QLabel *m_valueLabel;
     
     QString m_labelText;
+    bool m_snapToIncrements;
+    int m_increment;
 };
 
 #endif // CUSTOMSLIDER_H

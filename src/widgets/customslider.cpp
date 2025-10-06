@@ -3,6 +3,8 @@
 CustomSlider::CustomSlider(const QString &label, QWidget *parent)
     : QWidget(parent)
     , m_labelText(label)
+    , m_snapToIncrements(false)
+    , m_increment(25)
 {
     setupUI();
 }
@@ -21,8 +23,8 @@ void CustomSlider::setupUI()
     // Slider
     m_slider = new QSlider(Qt::Horizontal);
     m_slider->setObjectName("customSlider");
-    m_slider->setRange(0, 100);
-    m_slider->setValue(75);
+    m_slider->setRange(0, 4);  // 0=0%, 1=25%, 2=50%, 3=75%, 4=100%
+    m_slider->setValue(3);     // Default to 75%
     
     // Value label
     m_valueLabel = new QLabel("75%");
@@ -78,21 +80,74 @@ void CustomSlider::setupUI()
 
 void CustomSlider::setValue(int value)
 {
-    m_slider->setValue(value);
+    if (m_snapToIncrements && m_increment == 25) {
+        // Convert percentage to slider position (0-4)
+        int position = value / 25;
+        position = qBound(0, position, 4);
+        m_slider->setValue(position);
+    } else {
+        m_slider->setValue(value);
+    }
 }
 
 int CustomSlider::value() const
 {
-    return m_slider->value();
+    if (m_snapToIncrements && m_increment == 25) {
+        // Convert slider position (0-4) to percentage
+        return m_slider->value() * 25;
+    } else {
+        return m_slider->value();
+    }
 }
 
 void CustomSlider::setRange(int min, int max)
 {
-    m_slider->setRange(min, max);
+    // For 25% increments, we use 0-4 range internally (0=0%, 1=25%, 2=50%, 3=75%, 4=100%)
+    if (m_snapToIncrements && m_increment == 25) {
+        m_slider->setRange(0, 4);
+    } else {
+        m_slider->setRange(min, max);
+    }
+}
+
+void CustomSlider::setTickInterval(int interval)
+{
+    m_slider->setTickInterval(interval);
+    m_slider->setTickPosition(QSlider::TicksBelow);
+}
+
+void CustomSlider::setPageStep(int step)
+{
+    m_slider->setPageStep(step);
+    m_slider->setSingleStep(step);
+}
+
+void CustomSlider::setSnapToIncrements(bool enabled, int increment)
+{
+    m_snapToIncrements = enabled;
+    m_increment = increment;
 }
 
 void CustomSlider::onSliderValueChanged(int value)
 {
-    m_valueLabel->setText(QString::number(value) + "%");
-    emit valueChanged(value);
+    int finalValue = value;
+    
+    if (m_snapToIncrements && m_increment == 25) {
+        // Convert slider position (0-4) to percentage (0, 25, 50, 75, 100)
+        finalValue = value * 25;
+    } else if (m_snapToIncrements) {
+        // Snap to specified increments for other increment values
+        int halfIncrement = m_increment / 2;
+        finalValue = ((value + halfIncrement) / m_increment) * m_increment;
+        finalValue = qBound(0, finalValue, 100);
+        
+        // If the value changed due to snapping, update the slider
+        if (finalValue != value) {
+            m_slider->setValue(finalValue);
+            return; // This will trigger another call to this function with the snapped value
+        }
+    }
+    
+    m_valueLabel->setText(QString::number(finalValue) + "%");
+    emit valueChanged(finalValue);
 }

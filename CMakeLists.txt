@@ -64,6 +64,7 @@ set(SOURCES
     src/widgets/fancurvewidget.cpp
     src/widgets/monitoringcard.cpp
     src/widgets/customslider.cpp
+    src/widgets/fanlightingwidget.cpp
 )
 
 # Header files
@@ -78,6 +79,7 @@ set(HEADERS
     src/widgets/fancurvewidget.h
     src/widgets/monitoringcard.h
     src/widgets/customslider.h
+    src/widgets/fanlightingwidget.h
 )
 
 # Create executable

@@ -1,18 +1,41 @@
 #include "lightingpage.h"
 #include "widgets/customslider.h"
+#include "widgets/fanlightingwidget.h"
+#include "lian_li_qt_integration.h"
 #include <QFont>
+#include <QDebug>
+#include <QColorDialog>
 
 LightingPage::LightingPage(QWidget *parent)
     : QWidget(parent)
     , m_currentEffect("Rainbow")
-    , m_currentSpeed(75)
+    , m_currentSpeed(50)
     , m_currentBrightness(100)
     , m_directionLeft(false)
+    , m_lianLi(nullptr)
 {
+    // Initialize port colors to white
+    m_portColors[0] = QColor(255, 255, 255); // Port 1 - White
+    m_portColors[1] = QColor(255, 255, 255); // Port 2 - White
+    m_portColors[2] = QColor(255, 255, 255); // Port 3 - White
+    m_portColors[3] = QColor(255, 255, 255); // Port 4 - White
+    
+    // Initialize Lian Li integration
+    m_lianLi = new LianLiQtIntegration(this);
+    connect(m_lianLi, &LianLiQtIntegration::deviceConnected, this, &LightingPage::onDeviceConnected);
+    connect(m_lianLi, &LianLiQtIntegration::deviceDisconnected, this, &LightingPage::onDeviceDisconnected);
+    
     setupUI();
     setupControls();
     setupProductDemo();
     updateLightingPreview();
+    
+    // Try to initialize the device
+    if (m_lianLi->initialize()) {
+        onDeviceConnected();
+    } else {
+        qDebug() << "Lian Li device not connected";
+    }
 }
 
 void LightingPage::setupUI()
@@ -20,26 +43,6 @@ void LightingPage::setupUI()
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(20, 20, 20, 20);
     m_mainLayout->setSpacing(20);
-    
-    // Header
-    m_headerLayout = new QHBoxLayout();
-    m_headerLayout->setContentsMargins(0, 0, 0, 0);
-    
-    m_mbLightingSyncCheck = new QCheckBox("MB Lighting Sync");
-    m_mbLightingSyncCheck->setObjectName("headerCheck");
-    
-    m_exportBtn = new QPushButton("↑ Export");
-    m_exportBtn->setObjectName("actionButton");
-    
-    m_importBtn = new QPushButton("↓ Import");
-    m_importBtn->setObjectName("actionButton");
-    
-    m_headerLayout->addWidget(m_mbLightingSyncCheck);
-    m_headerLayout->addStretch();
-    m_headerLayout->addWidget(m_exportBtn);
-    m_headerLayout->addWidget(m_importBtn);
-    
-    m_mainLayout->addLayout(m_headerLayout);
     
     // Content layout
     m_contentLayout = new QHBoxLayout();
@@ -49,30 +52,9 @@ void LightingPage::setupUI()
     m_rightLayout = new QVBoxLayout();
     
     m_contentLayout->addLayout(m_leftLayout, 1);
-    m_contentLayout->addLayout(m_rightLayout, 2);
+    m_contentLayout->addLayout(m_rightLayout, 1);  // Changed from 2 to 1 for equal sizing
     
     m_mainLayout->addLayout(m_contentLayout);
-    
-    // Apply styles
-    setStyleSheet(R"(
-        #headerCheck {
-            color: #ffffff;
-            font-size: 14px;
-        }
-        
-        #actionButton {
-            background-color: #2a82da;
-            color: #ffffff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            margin-left: 8px;
-        }
-        
-        #actionButton:hover {
-            background-color: #1e6bb8;
-        }
-    )");
 }
 
 void LightingPage::setupControls()
@@ -91,10 +73,12 @@ void LightingPage::setupControls()
     m_effectCombo = new QComboBox();
     m_effectCombo->setObjectName("effectCombo");
     m_effectCombo->addItems({
-        "Rainbow", "Rainbow Morph", "Static Color", "Breathing", 
-        "Breathing Rainbow", "Runway", "Mop up", "Meteor", "Warning",
-        "Voice", "Mixing", "Stack", "Tide", "Scan", "Door",
-        "Heart Beat", "Heart Beat Runway", "Disco", "Electric Current"
+        "Rainbow",
+        "Rainbow Morph",
+        "Static Color",
+        "Breathing",
+        "Meteor",
+        "Runway"
     });
     m_effectCombo->setCurrentText("Rainbow");
     
@@ -104,22 +88,60 @@ void LightingPage::setupControls()
     lightingLayout->addWidget(effectLabel);
     lightingLayout->addWidget(m_effectCombo);
     
-    // Speed slider
+    // Static Color specific controls
+    m_staticColorWidget = new QWidget();
+    QVBoxLayout *staticColorLayout = new QVBoxLayout(m_staticColorWidget);
+    staticColorLayout->setContentsMargins(0, 0, 0, 0);
+    
+    QLabel *colorLabel = new QLabel("PORT COLORS");
+    colorLabel->setObjectName("controlLabel");
+    staticColorLayout->addWidget(colorLabel);
+    
+    m_colorBoxLayout = new QHBoxLayout();
+    m_colorBoxLayout->setSpacing(10);
+    
+    for (int i = 0; i < 4; ++i) {
+        m_colorButtons[i] = new QPushButton();
+        m_colorButtons[i]->setObjectName("colorButton");
+        m_colorButtons[i]->setFixedSize(40, 40);
+        m_colorButtons[i]->setProperty("portIndex", i);
+        updateColorButton(i);
+        
+        connect(m_colorButtons[i], &QPushButton::clicked, this, &LightingPage::onColorButtonClicked);
+        m_colorBoxLayout->addWidget(m_colorButtons[i]);
+    }
+    m_colorBoxLayout->addStretch();
+    staticColorLayout->addLayout(m_colorBoxLayout);
+    
+    lightingLayout->addWidget(m_staticColorWidget);
+    
+    // Initially hide static color widget (only show for Static Color effect)
+    m_staticColorWidget->setVisible(false);
+    
+    // Speed slider (25% increments: 0, 25, 50, 75, 100)
     m_speedSlider = new CustomSlider("SPEED");
-    m_speedSlider->setValue(75);
+    m_speedSlider->setSnapToIncrements(true, 25);  // Enable 25% snapping first
+    m_speedSlider->setRange(0, 100);  // This will be converted to 0-4 internally
+    m_speedSlider->setValue(50);  // Default to 50% (medium speed)
     connect(m_speedSlider, &CustomSlider::valueChanged, this, &LightingPage::onSpeedChanged);
     lightingLayout->addWidget(m_speedSlider);
     
-    // Brightness slider
+    // Brightness slider (25% increments: 0, 25, 50, 75, 100)
     m_brightnessSlider = new CustomSlider("BRIGHTNESS");
-    m_brightnessSlider->setValue(100);
+    m_brightnessSlider->setSnapToIncrements(true, 25);  // Enable 25% snapping first
+    m_brightnessSlider->setRange(0, 100);  // This will be converted to 0-4 internally
+    m_brightnessSlider->setValue(100);  // Default to 100% (full brightness)
     connect(m_brightnessSlider, &CustomSlider::valueChanged, this, &LightingPage::onBrightnessChanged);
     lightingLayout->addWidget(m_brightnessSlider);
     
-    // Direction controls
+    // Direction controls (wrapped in a widget for show/hide)
+    m_directionWidget = new QWidget();
+    QVBoxLayout *directionWidgetLayout = new QVBoxLayout(m_directionWidget);
+    directionWidgetLayout->setContentsMargins(0, 0, 0, 0);
+    
     QLabel *directionLabel = new QLabel("DIRECTION");
     directionLabel->setObjectName("controlLabel");
-    lightingLayout->addWidget(directionLabel);
+    directionWidgetLayout->addWidget(directionLabel);
     
     m_directionLayout = new QHBoxLayout();
     m_directionLayout->setSpacing(10);
@@ -140,7 +162,8 @@ void LightingPage::setupControls()
     m_directionLayout->addWidget(m_rightDirectionBtn);
     m_directionLayout->addStretch();
     
-    lightingLayout->addLayout(m_directionLayout);
+    directionWidgetLayout->addLayout(m_directionLayout);
+    lightingLayout->addWidget(m_directionWidget);
     
     // Apply button
     m_applyBtn = new QPushButton("Apply");
@@ -218,36 +241,35 @@ void LightingPage::setupControls()
         #applyButton:hover {
             background-color: #1e6bb8;
         }
+        
+        #colorButton {
+            border: 2px solid #555555;
+            border-radius: 4px;
+            min-width: 40px;
+            min-height: 40px;
+        }
+        
+        #colorButton:hover {
+            border-color: #2a82da;
+        }
     )");
 }
 
 void LightingPage::setupProductDemo()
 {
     // Product demo header
-    QHBoxLayout *demoHeaderLayout = new QHBoxLayout();
-    
     m_demoLabel = new QLabel("Product Demo");
     m_demoLabel->setObjectName("demoLabel");
     
-    m_productCombo = new QComboBox();
-    m_productCombo->setObjectName("productCombo");
-    m_productCombo->addItems({"SL Fan", "SL Infinity", "UNI HUB"});
-    m_productCombo->setCurrentText("SL Fan");
+    m_rightLayout->addWidget(m_demoLabel);
     
-    demoHeaderLayout->addWidget(m_demoLabel);
-    demoHeaderLayout->addStretch();
-    demoHeaderLayout->addWidget(m_productCombo);
+    // Fan lighting visualization
+    m_fanLightingWidget = new FanLightingWidget();
+    m_fanLightingWidget->setMinimumSize(350, 250);  // Smaller minimum size
+    m_fanLightingWidget->setMaximumHeight(300);     // Limit maximum height
+    m_fanLightingWidget->setObjectName("fanLightingWidget");
     
-    m_rightLayout->addLayout(demoHeaderLayout);
-    
-    // Demo image placeholder
-    m_demoImageLabel = new QLabel();
-    m_demoImageLabel->setObjectName("demoImage");
-    m_demoImageLabel->setMinimumSize(400, 300);
-    m_demoImageLabel->setAlignment(Qt::AlignCenter);
-    m_demoImageLabel->setText("PC Build Demo\n(RGB Lighting Preview)");
-    
-    m_rightLayout->addWidget(m_demoImageLabel);
+    m_rightLayout->addWidget(m_fanLightingWidget);
     m_rightLayout->addStretch();
     
     // Apply demo styles
@@ -258,39 +280,49 @@ void LightingPage::setupProductDemo()
             font-weight: bold;
         }
         
-        #productCombo {
-            background-color: #404040;
-            color: #ffffff;
-            border: 1px solid #555555;
-            border-radius: 4px;
-            padding: 6px;
-        }
-        
-        #demoImage {
+        #fanLightingWidget {
             background-color: #1a1a1a;
             border: 2px solid #404040;
             border-radius: 8px;
-            color: #888888;
-            font-size: 14px;
         }
     )");
 }
 
 void LightingPage::updateLightingPreview()
 {
-    // Update the demo image based on current settings
-    QString previewText = QString("PC Build Demo\n\nEffect: %1\nSpeed: %2%\nBrightness: %3%\nDirection: %4")
-                         .arg(m_currentEffect)
-                         .arg(m_currentSpeed)
-                         .arg(m_currentBrightness)
-                         .arg(m_directionLeft ? "Left" : "Right");
-    
-    m_demoImageLabel->setText(previewText);
+    // Update the fan lighting widget with current settings
+    if (m_fanLightingWidget) {
+        m_fanLightingWidget->setEffect(m_currentEffect);
+        m_fanLightingWidget->setSpeed(m_currentSpeed);
+        m_fanLightingWidget->setBrightness(m_currentBrightness);
+        m_fanLightingWidget->setDirection(m_directionLeft);
+        
+        // Set color for effects that use it
+        if (m_currentEffect == "Static Color") {
+            // For static color, pass the port colors
+            m_fanLightingWidget->setPortColors(m_portColors);
+        } else if (m_currentEffect == "Breathing") {
+            m_fanLightingWidget->setColor(QColor(255, 255, 255)); // White for breathing
+        } else if (m_currentEffect == "Meteor") {
+            m_fanLightingWidget->setColor(QColor(100, 200, 255)); // Blue-white for meteor
+        } else if (m_currentEffect == "Runway") {
+            m_fanLightingWidget->setColor(QColor(255, 200, 100)); // Orange for runway
+        } else {
+            m_fanLightingWidget->setColor(QColor(255, 255, 255)); // Default color
+        }
+    }
 }
 
 void LightingPage::onEffectChanged()
 {
     m_currentEffect = m_effectCombo->currentText();
+    
+    // Show/hide controls based on effect
+    bool isStaticColor = (m_currentEffect == "Static Color");
+    m_staticColorWidget->setVisible(isStaticColor);
+    m_speedSlider->setVisible(!isStaticColor);
+    m_directionWidget->setVisible(!isStaticColor);
+    
     updateLightingPreview();
 }
 
@@ -326,13 +358,90 @@ void LightingPage::onDirectionChanged()
 
 void LightingPage::onApply()
 {
-    // Apply lighting settings
+    // Update preview
     updateLightingPreview();
+    
+    // Apply lighting settings to device if connected
+    if (!m_lianLi || !m_lianLi->isConnected()) {
+        qDebug() << "Device not connected - cannot apply lighting";
+        return;
+    }
+    
+    bool success = false;
+    
+    qDebug() << "Applying effect:" << m_currentEffect 
+             << "Speed:" << m_currentSpeed 
+             << "Brightness:" << m_currentBrightness 
+             << "Direction:" << (m_directionLeft ? "Left" : "Right");
+    
+    if (m_currentEffect == "Rainbow") {
+        success = m_lianLi->setRainbowEffect(m_currentSpeed, m_currentBrightness, m_directionLeft);
+    } else if (m_currentEffect == "Rainbow Morph") {
+        success = m_lianLi->setRainbowMorphEffect(m_currentSpeed, m_currentBrightness, m_directionLeft);
+    } else if (m_currentEffect == "Static Color") {
+        // For static color, set each port to its individual color with brightness
+        // Map ports to channels: Port 1->Channel 0, Port 2->Channel 1, Port 3->Channel 2, Port 4->Channel 3
+        success = true;
+        for (int port = 0; port < 4; ++port) {
+            qDebug() << "Setting Port" << (port + 1) << "to color" << m_portColors[port] << "on channel" << port << "with brightness" << m_currentBrightness;
+            if (!m_lianLi->setChannelColor(port, m_portColors[port], m_currentBrightness)) {
+                qDebug() << "Failed to set Port" << (port + 1) << "on channel" << port;
+                success = false;
+            } else {
+                qDebug() << "Successfully set Port" << (port + 1) << "on channel" << port;
+            }
+        }
+    } else if (m_currentEffect == "Breathing") {
+        // For breathing, use white as default (could add color picker later)
+        success = m_lianLi->setBreathingEffect(QColor(255, 255, 255), m_currentSpeed, m_currentBrightness, m_directionLeft);
+    } else if (m_currentEffect == "Meteor") {
+        success = m_lianLi->setMeteorEffect(m_currentSpeed, m_currentBrightness, m_directionLeft);
+    } else if (m_currentEffect == "Runway") {
+        success = m_lianLi->setRunwayEffect(m_currentSpeed, m_currentBrightness, m_directionLeft);
+    }
+    
+    if (success) {
+        qDebug() << "✓ Successfully applied effect:" << m_currentEffect;
+    } else {
+        qDebug() << "✗ Failed to apply effect:" << m_currentEffect;
+    }
 }
 
-void LightingPage::onMbLightingSyncToggled()
+void LightingPage::onDeviceConnected()
 {
-    // Handle MB lighting sync toggle
-    bool isEnabled = m_mbLightingSyncCheck->isChecked();
-    // Update lighting sync logic here
+    qDebug() << "Lian Li device connected";
+}
+
+void LightingPage::onDeviceDisconnected()
+{
+    qDebug() << "Lian Li device disconnected";
+}
+
+void LightingPage::onColorButtonClicked()
+{
+    QPushButton *button = qobject_cast<QPushButton*>(sender());
+    if (!button) return;
+    
+    int portIndex = button->property("portIndex").toInt();
+    if (portIndex < 0 || portIndex >= 4) return;
+    
+    QColor currentColor = m_portColors[portIndex];
+    QColor newColor = QColorDialog::getColor(currentColor, this, 
+        QString("Select Color for Port %1").arg(portIndex + 1));
+    
+    if (newColor.isValid()) {
+        m_portColors[portIndex] = newColor;
+        updateColorButton(portIndex);
+        updateLightingPreview();
+    }
+}
+
+void LightingPage::updateColorButton(int portIndex)
+{
+    if (portIndex < 0 || portIndex >= 4) return;
+    
+    QColor color = m_portColors[portIndex];
+    QString style = QString("QPushButton { background-color: %1; border: 2px solid #555555; border-radius: 4px; }")
+                   .arg(color.name());
+    m_colorButtons[portIndex]->setStyleSheet(style);
 }

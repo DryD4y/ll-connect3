@@ -36,15 +36,23 @@ public:
     QString getSerialNumber() const;
     
     // RGB Control
-    bool setChannelColor(int channel, const QColor &color);
+    bool setChannelColor(int channel, const QColor &color, int brightness = 100);
     bool setChannelMode(int channel, int mode);
     bool turnOffChannel(int channel);
     bool turnOffAllChannels();
     
     // Convenience methods
-    bool setAllChannelsColor(const QColor &color);
-    bool setRainbowEffect();
-    bool setBreathingEffect(const QColor &color);
+    bool setAllChannelsColor(const QColor &color, int brightness = 100);
+    bool setRainbowEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setRainbowMorphEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setBreathingEffect(const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setMeteorEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setRunwayEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
+    
+    // Helper to convert percentage values to hardware values
+    static uint8_t convertSpeed(int speedPercent);
+    static uint8_t convertBrightness(int brightnessPercent);
+    static uint8_t convertDirection(bool directionLeft);
     
     // Channel management
     int getChannelCount() const { return 8; }

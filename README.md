@@ -11,11 +11,11 @@ A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing bot
 - **Reliable Communication**: Stable USB HID communication with the controller
 
 ### Qt Application
-- **System Monitoring**: Real-time CPU, GPU, RAM, Network, and Storage monitoring
+- **System Info**: Real-time CPU, GPU, RAM, Network, and Storage monitoring
 
 <img src="docs/screenshots/systeminfo.png" width="600"/> 
 
-- **Advanced Fan Control**: 
+- **Fan Profile**: 
   - Per-port custom fan curves with drag-and-drop curve editor
   - Real-time fan speed adjustments with immediate response
   - 4 built-in profiles: Quiet, StdSP, HighSP, FullSP (all dBA-calibrated to Windows)
@@ -28,7 +28,10 @@ A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing bot
 
 <img src="docs/screenshots/fanprofile.png" width="600"/> 
 
-- **RGB Lighting Control**: Full RGB control via USB HID with 18+ effects, speed, brightness, and direction controls (or use OpenRGB for advanced RGB control)
+- **Lighting**: Full RGB control via USB HID with 6 core effects, speed, brightness, color and direction controls for Rainbow, Rainbow Morph, Static Color, Breathing, Meteor, and Runway. There are also animated fans to show you the settings you choose in the application before you apply to the fans in your case
+
+<img src="docs/screenshots/lighting.png" width="600"/> 
+
 - **Settings**: Theme customization and system integration
 
 ## 📋 Supported Devices
@@ -64,7 +67,7 @@ sudo insmod Lian_Li_SL_INFINITY.ko
 ls -la /proc/Lian_li_SL_INFINITY/
 ```
 
-**Note**: The kernel driver is now **fan-only** and **OpenRGB compatible**. RGB control is handled by OpenRGB to prevent conflicts.
+**Note**: The kernel driver is now **fan-only**. RGB control is handled by the L-Connect3 application using the OpenRGB protocol.
 
 ### Step 2: Install L-Connect3 Application
 
@@ -126,15 +129,16 @@ ls -la /proc/Lian_li_SL_INFINITY/
    echo "50" | sudo tee /proc/Lian_li_SL_INFINITY/Port_2/fan_speed
    ```
 
-3. **Test RGB with OpenRGB:**
-   - Install OpenRGB: `sudo apt install openrgb`
-   - Run OpenRGB and control RGB lighting
-   - Both fan control (kernel driver) and RGB control (OpenRGB) work together!
+3. **Test RGB with L-Connect3:**
+   - Launch L-Connect3: `LConnect3`
+   - Go to the Lighting page
+   - Select effects and control RGB lighting directly
+   - Both fan control (kernel driver) and RGB control (L-Connect3) work together!
 
 ### Current Status
 
 - ✅ **Fan Control**: Working via kernel driver (63.4 dBA at 100%)
-- ✅ **RGB Control**: Working via OpenRGB (no conflicts)
+- ✅ **RGB Control**: Working via L-Connect3 application
 - ✅ **Unified App**: L-Connect3 integrates both systems
 
 ## 📊 Performance
@@ -182,24 +186,31 @@ cat /proc/Lian_li_SL_INFINITY/Port_1/fan_speed
 
 ### RGB Lighting Control
 
-The L-Connect3 app includes a **built-in Lighting page** with:
-- 18+ lighting effects (Rainbow, Static, Breathing, Meteor, etc.)
-- Speed, brightness, and direction controls
-- Visual effect preview
+The L-Connect3 app includes a **fully functional Lighting page** with:
 
-**Hardware integration note**: The lighting controls are currently UI-only. For active RGB control, you can use **OpenRGB** which works alongside our fan control:
+#### **Core Lighting Effects:**
+- **Rainbow**: Classic rainbow cycling effect
+- **Rainbow Morph**: Morphing rainbow with smooth transitions
+- **Static Color**: Individual port color control (4 ports)
+- **Breathing**: Pulsing color effect
+- **Meteor**: Shooting star effect across fans
+- **Runway**: Moving light effect
 
-1. **Install OpenRGB:**
-   ```bash
-   sudo apt install openrgb
-   ```
+#### **Control Features:**
+- **Speed Control**: 25% increments (0%, 25%, 50%, 75%, 100%)
+- **Brightness Control**: 25% increments (0%, 25%, 50%, 75%, 100%)
+- **Direction Control**: Left-to-right or right-to-left
+- **Port-Specific Colors**: For Static Color effect, each port can have its own color
+- **Real-time Preview**: Visual demo showing how effects will look
+- **Hardware Integration**: Direct USB HID communication with the controller
 
-2. **Run OpenRGB:**
-   ```bash
-   openrgb
-   ```
-
-3. **Control RGB lighting** through OpenRGB while fan control continues working via L-Connect3
+#### **Usage:**
+1. **Launch L-Connect3**: `LConnect3`
+2. **Go to Lighting page**
+3. **Select effect** from the dropdown
+4. **Adjust speed, brightness, direction** as needed
+5. **For Static Color**: Click color boxes to set individual port colors
+6. **Click Apply** to send settings to hardware
 
 ### GUI Application
 
@@ -218,7 +229,7 @@ The GUI provides:
   - "Apply To All" to copy curves between ports
   - "Default" button to restore profile defaults
   - Persistent curve storage (saves across restarts)
-- **RGB Lighting Page**: Built-in UI with 18+ effects, speed/brightness controls (use OpenRGB for hardware control)
+- **RGB Lighting Page**: Built-in UI with 6 core effects, speed/brightness/direction controls, and hardware integration
 - **Settings and Themes**: Dark/light modes and system integration
 
 ## 🔧 Uninstallation
@@ -320,6 +331,21 @@ ls -la /proc/Lian_li_SL_INFINITY/Port_1/fan_speed
 - **0xE0 Protocol**: 7-byte HID reports for fan and lighting control
 - **0x02 Protocol**: 8-byte HID reports for precise RPM control (experimental)
 - **Multiple Modes**: Standard SP, High SP, Full SP support
+
+### RGB Lighting Implementation
+
+- **OpenRGB Protocol**: Uses OpenRGB's proven HID communication methods
+- **Channel Mapping**: 4 channels (Ports 1-4) with 64 LEDs per channel (16 LEDs × 4 fans)
+- **Color Format**: RBG format (Red, Blue, Green) as required by hardware
+- **Effect Modes**: 
+  - Static Color (0x01): Individual port colors
+  - Rainbow (0x05): Hardware-generated rainbow effect
+  - Rainbow Morph (0x04): Morphing rainbow effect
+  - Breathing (0x02): Pulsing effect
+  - Meteor (0x24): Shooting star effect
+  - Runway (0x1C): Moving light effect
+- **Control Parameters**: 25% increment sliders for speed/brightness, boolean direction control
+- **Hardware Integration**: Direct USB HID communication with SL-Infinity controller
 
 ### Kernel Module Information
 
