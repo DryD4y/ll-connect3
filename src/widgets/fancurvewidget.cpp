@@ -19,6 +19,7 @@ FanCurveWidget::FanCurveWidget(QWidget *parent)
     , m_tempMax(100)
     , m_rpmMin(0)
     , m_rpmMax(2100)
+    , m_displayRpmMax(2100)
     , m_dragging(false)
     , m_draggedPoint(-1)
     , m_graphEnabled(true)
@@ -31,6 +32,14 @@ FanCurveWidget::FanCurveWidget(QWidget *parent)
 {
     setMinimumSize(400, 200);
     setupCurveData();
+}
+
+void FanCurveWidget::setFanSize(int maxRPM)
+{
+    // Only change the display labels, not the actual curve scaling
+    m_displayRpmMax = maxRPM;
+    // Keep m_rpmMax at 2100 so curves don't move
+    update();
 }
 
 void FanCurveWidget::setProfile(const QString &profile)
@@ -170,17 +179,30 @@ void FanCurveWidget::drawGrid(QPainter &painter)
         painter.drawLine(x, graphRect.top(), x, graphRect.bottom());
     }
     
-    // Horizontal grid lines (RPM)
+    // Horizontal grid lines (RPM) - adjust grid lines based on fan size, but position using 120mm scale
+    int rpmStep = 420; // Default for 120mm fans
+    int minorStep = 210; // Half of major step
+    if (m_displayRpmMax == 1600) {
+        rpmStep = 400; // For 140mm fans
+        minorStep = 200; // Half of major step
+    }
+    
     painter.setPen(QPen(m_gridColor, 1));
-    for (int rpm = 0; rpm <= 2100; rpm += 420) {
-        int y = graphRect.bottom() - (rpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
+    for (int rpm = 0; rpm <= m_displayRpmMax; rpm += rpmStep) {
+        // Calculate position using 120mm scale (2100 max)
+        double scaleFactor = (double)rpm / m_displayRpmMax; // 0.0 to 1.0
+        double positionRpm = scaleFactor * 2100.0; // Map to 120mm scale for positioning
+        int y = graphRect.bottom() - (positionRpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
         painter.drawLine(graphRect.left(), y, graphRect.right(), y);
     }
     
     // Minor horizontal grid lines
     painter.setPen(QPen(m_gridColor, 0.5));
-    for (int rpm = 210; rpm < 2100; rpm += 420) {
-        int y = graphRect.bottom() - (rpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
+    for (int rpm = minorStep; rpm < m_displayRpmMax; rpm += rpmStep) {
+        // Calculate position using 120mm scale (2100 max)
+        double scaleFactor = (double)rpm / m_displayRpmMax; // 0.0 to 1.0
+        double positionRpm = scaleFactor * 2100.0; // Map to 120mm scale for positioning
+        int y = graphRect.bottom() - (positionRpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
         painter.drawLine(graphRect.left(), y, graphRect.right(), y);
     }
 }
@@ -207,9 +229,17 @@ void FanCurveWidget::drawAxes(QPainter &painter)
         painter.drawText(x - 15, graphRect.bottom() + 15, 30, 15, Qt::AlignCenter, QString::number(temp) + "°C");
     }
     
-    // Y-axis labels (RPM)
-    for (int rpm = 0; rpm <= 2100; rpm += 420) {
-        int y = graphRect.bottom() - (rpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
+    // Y-axis labels (RPM) - adjust labels based on fan size, but position stays the same
+    int rpmStep = 420; // Default for 120mm fans (2100 / 5)
+    if (m_displayRpmMax == 1600) {
+        rpmStep = 400; // For 140mm fans (1600 / 4)
+    }
+    
+    for (int rpm = 0; rpm <= m_displayRpmMax; rpm += rpmStep) {
+        // Calculate position using 120mm scale (2100 max), but show 140mm labels (1600 max)
+        double scaleFactor = (double)rpm / m_displayRpmMax; // 0.0 to 1.0
+        double positionRpm = scaleFactor * 2100.0; // Map to 120mm scale for positioning
+        int y = graphRect.bottom() - (positionRpm - m_rpmMin) / (m_rpmMax - m_rpmMin) * graphRect.height();
         painter.drawText(5, y - 10, m_marginLeft - 10, 20, Qt::AlignRight | Qt::AlignVCenter, QString::number(rpm));
     }
 }
@@ -294,33 +324,6 @@ void FanCurveWidget::drawCurrentLine(QPainter &painter)
     painter.setPen(QPen(rpmColor, 2));
     painter.setBrush(QBrush(rpmColor));
     painter.drawEllipse(curvePoint, 4, 4); // Fixed at the same position as temperature ball
-    
-    // Temperature label removed - shown in table above instead
-    
-    // Draw legend inside the graph area on the left side
-    painter.setPen(QPen(Qt::white, 1));
-    QFont legendFont = painter.font();
-    legendFont.setPointSize(7);
-    legendFont.setBold(false);
-    painter.setFont(legendFont);
-    
-    // Position legend inside the graph area, around 0-15°C and 1000-1500 RPM range
-    int legendX = graphRect.left() + 20;  // Inside the graph, 20px from left edge
-    int legendY = graphRect.top() + 60;   // Moved up by 20px from previous position
-    
-    // Temperature ball legend
-    painter.setPen(QPen(lineColor, 2));
-    painter.setBrush(QBrush(lineColor));
-    painter.drawEllipse(legendX, legendY, 6, 6);
-    painter.setPen(QPen(Qt::white, 1));
-    painter.drawText(legendX + 10, legendY + 4, 80, 15, Qt::AlignLeft | Qt::AlignVCenter, "Temp Target");
-    
-    // Fixed orange dot legend
-    painter.setPen(QPen(rpmColor, 2));
-    painter.setBrush(QBrush(rpmColor));
-    painter.drawEllipse(legendX, legendY + 20, 6, 6);
-    painter.setPen(QPen(Qt::white, 1));
-    painter.drawText(legendX + 10, legendY + 24, 80, 15, Qt::AlignLeft | Qt::AlignVCenter, "Fan Status");
 }
 
 QPointF FanCurveWidget::dataToPixel(const QPointF &dataPoint)

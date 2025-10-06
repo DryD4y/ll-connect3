@@ -1,14 +1,14 @@
 # <img src="resources/logo.png" width="50" align="center"/> Linux L-Connect 3 Driver & Application
 
-A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing both kernel driver support and a Qt-based GUI application that closely mimics the original Windows application.
+A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing both kernel driver support and a Qt-based GUI application that closely mimics the original Windows application for the **Lian Li SL-Infinity Hub & 120/140mm Fans**
 
 ## 🎯 Features
 
 ### Kernel Driver
-- **Fan Speed Control**: Precise control of all connected fans
-- **RGB Lighting**: Full RGB lighting control and effects
-- **Multiple Protocols**: Support for both 0xE0 and 0x02 HID protocols
+- **Fan Speed Control**: Precise fan speed control via `/proc` interface
 - **Per-Port Control**: Individual control of up to 4 fan ports
+- **User Configuration**: Manual fan presence configuration per port
+- **Reliable Communication**: Stable USB HID communication with the controller
 
 ### Qt Application
 - **System Monitoring**: Real-time CPU, GPU, RAM, Network, and Storage monitoring
@@ -18,14 +18,17 @@ A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing bot
 - **Advanced Fan Control**: 
   - Per-port custom fan curves with drag-and-drop curve editor
   - Real-time fan speed adjustments with immediate response
-  - 4 optimized profiles: Quiet, StdSP, HighSP, FullSP (all dBA-calibrated)
+  - 4 built-in profiles: Quiet, StdSP, HighSP, FullSP (all dBA-calibrated to Windows)
+  - 3 customizable profiles with renameable names (up to 6 characters)
+  - Per-port fan size configuration (120mm/140mm) with dynamic RPM scaling
   - Per-port curve storage with persistent configuration
   - "Apply To All" and "Default" buttons for easy curve management
   - 840 RPM minimum safety enforcement to prevent fan shutdown
+  - Profile persistence - remembers your selected profile across app restarts
 
 <img src="docs/screenshots/fanprofile.png" width="600"/> 
 
-- **RGB Lighting Control**: Built-in lighting effects page with 18+ effects, speed, brightness, and direction controls (hardware integration coming soon, or use OpenRGB for immediate RGB control)
+- **RGB Lighting Control**: Full RGB control via USB HID with 18+ effects, speed, brightness, and direction controls (or use OpenRGB for advanced RGB control)
 - **Settings**: Theme customization and system integration
 
 ## 📋 Supported Devices

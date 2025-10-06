@@ -29,10 +29,11 @@ private slots:
     void onProfileChanged();
     void onDefaultClicked();
     void onApplyToAllClicked();
-    void onStartStopToggled();
     void updateFanData();
     void onCurvePointsChanged(const QVector<QPointF> &points);
     void onPortSelectionChanged();
+    void onFanSizeChanged(int port);
+    void onRenameCustomProfile(int profileNum);
 
 private:
     void setupUI();
@@ -59,8 +60,11 @@ private:
     QColor getTemperatureColor(int temperature);
     void saveCustomCurves();
     void loadCustomCurves();
+    void saveCustomProfiles();
+    void loadCustomProfiles();
     QVector<QPointF> getDefaultCurveForProfile(const QString &profile);
     int calculateRPMForCustomCurve(int port, int temperature);
+    QString getCurrentProfile();
     // Fan detection functions removed - configuration is now in Settings
     
     QVBoxLayout *m_mainLayout;
@@ -81,13 +85,9 @@ private:
     QRadioButton *m_stdSpRadio;
     QRadioButton *m_highSpRadio;
     QRadioButton *m_fullSpRadio;
-    
-    QCheckBox *m_startStopCheck;
-    
-    QLabel *m_tempLabel;
-    QSpinBox *m_tempSpinBox;
-    QLabel *m_rpmLabel;
-    QSpinBox *m_rpmSpinBox;
+    QRadioButton *m_custom1Radio;
+    QRadioButton *m_custom2Radio;
+    QRadioButton *m_custom3Radio;
     
     QPushButton *m_applyToAllButton;
     QPushButton *m_defaultButton;
@@ -97,6 +97,10 @@ private:
     
     // Per-port custom curves (port 1-4 -> curve points)
     QMap<int, QVector<QPointF>> m_customCurves;
+    
+    // Custom profile names and base curves
+    QMap<int, QString> m_customProfileNames; // Profile 1-3 -> custom name
+    QMap<int, QVector<QPointF>> m_customProfileCurves; // Profile 1-3 -> base curve
     
     // Update timers
     QTimer *m_updateTimer;
@@ -119,6 +123,9 @@ private:
     // Port detection
     QVector<bool> m_portConnected;
     QVector<int> m_activePorts;
+    
+    // Fan size per port (120mm = 2100 RPM, 140mm = 1600 RPM)
+    QMap<int, int> m_fanSizeMaxRPM;
     
     // HID controller for fan control
     LianLiSLInfinityController *m_hidController;

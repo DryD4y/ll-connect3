@@ -19,6 +19,7 @@ public:
     void setCurrentRPM(int rpm);
     void setGraphEnabled(bool enabled);
     void setCustomCurve(const QVector<QPointF> &points);
+    void setFanSize(int maxRPM); // Set max RPM based on fan size (2100 for 120mm, 1600 for 140mm)
     QVector<QPointF> getCurvePoints() const { return m_curvePoints; }
 
 signals:
@@ -55,6 +56,7 @@ private:
     // Data ranges
     double m_tempMin, m_tempMax;
     double m_rpmMin, m_rpmMax;
+    double m_displayRpmMax; // Max RPM to display on labels (1600 for 140mm, 2100 for 120mm)
     
     // Curve data points (temperature, rpm)
     QVector<QPointF> m_curvePoints;
