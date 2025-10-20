@@ -58,7 +58,7 @@ A complete Linux solution for Lian Li L-Connect 3 fan controllers, providing bot
 Quick start:
 ```bash
 # Clone and build
-git clone https://github.com/your-username/ll-connect3.git
+git clone https://github.com/joeytroy/ll-connect3.git
 cd ll-connect3/kernel
 make
 sudo insmod Lian_Li_SL_INFINITY.ko
@@ -74,21 +74,13 @@ ls -la /proc/Lian_li_SL_INFINITY/
 1. **Install Qt dependencies and monitoring tools:**
    ```bash
    # Ubuntu/Debian
-   sudo apt install qt6-base-dev qt6-charts-dev cmake build-essential \
-                    lm-sensors
+   sudo apt update
+   sudo apt install qt6-base-dev qt6-charts-dev cmake build-essential lm-sensors libusb-1.0-0-dev libhidapi-dev -y
    
    # Optional GPU monitoring tools (install based on your GPU):
    # For NVIDIA: nvidia-smi (included with nvidia drivers)
    # For AMD: sudo apt install radeontop
    # For Intel: sudo apt install intel-gpu-tools
-   
-   # Fedora
-   sudo dnf install qt6-qtbase-devel qt6-qtcharts-devel cmake gcc-c++ \
-                    lm_sensors
-   
-   # Arch Linux
-   sudo pacman -S qt6-base qt6-charts cmake base-devel \
-                  lm_sensors
    ```
 
 2. **Configure sensors (first time only):**
