@@ -130,3 +130,14 @@ install(TARGETS LConnect3
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
+
+# Install desktop file
+install(FILES lconnect3.desktop
+    DESTINATION share/applications
+)
+
+# Install icon
+install(FILES resources/logo.png
+    DESTINATION share/pixmaps
+    RENAME lconnect3.png
+)

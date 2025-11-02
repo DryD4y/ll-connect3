@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=L-Connect 3
+GenericName=Fan Controller
+Comment=Linux L-Connect 3 driver and application for Lian Li SL-Infinity fans
+Exec=LConnect3
+Icon=lconnect3
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+StartupNotify=true
+Keywords=fan;cooling;lian li;rgb;controller;
+
