@@ -54,6 +54,17 @@ uninstall_kernel_driver() {
     else
         print_info "Auto-load configuration not found, skipping..."
     fi
+
+    # Remove udev rule for HID access
+    if [ -f "/etc/udev/rules.d/60-lianli-sl-infinity.rules" ]; then
+        print_info "Removing udev HID access rule..."
+        sudo rm -f /etc/udev/rules.d/60-lianli-sl-infinity.rules
+        sudo udevadm control --reload
+        sudo udevadm trigger
+        print_success "udev rule removed"
+    else
+        print_info "udev HID access rule not found, skipping..."
+    fi
     
     # Unload module if loaded
     if lsmod | grep -q "Lian_Li_SL_INFINITY"; then

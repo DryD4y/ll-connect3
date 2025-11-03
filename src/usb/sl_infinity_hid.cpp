@@ -17,6 +17,9 @@
 #include <algorithm>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <limits.h>
 
 using namespace std::chrono_literals;
 
@@ -92,18 +95,44 @@ std::string SLInfinityHIDController::GetSerialNumber() const {
     return m_serialNumber;
 }
 
+static bool readSmallFile(const std::string& path, std::string& out) {
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+    std::getline(f, out);
+    // trim
+    while (!out.empty() && (out.back()=='\n' || out.back()=='\r' || out.back()==' ')) out.pop_back();
+    return true;
+}
+
 bool SLInfinityHIDController::FindDevice() {
-    // Look for SL Infinity device in /dev/hidraw*
-    for (int i = 0; i < 10; i++) {
-        std::string devicePath = "/dev/hidraw" + std::to_string(i);
-        
-        if (m_device.Open(devicePath)) {
-            // Try to read device info to verify it's our device
-            // For now, just assume it's correct if we can open it
-            return true;
+    // Match by VID/PID via sysfs to select the correct hidraw node
+    const std::string targetVid = "0cf2";
+    const std::string targetPid = "a102";
+
+    for (int i = 0; i < 32; i++) {
+        std::string hidraw = "/dev/hidraw" + std::to_string(i);
+        std::string sysBase = "/sys/class/hidraw/hidraw" + std::to_string(i) + "/device";
+
+        // Walk up to find idVendor/idProduct
+        std::string current = sysBase;
+        for (int up = 0; up < 6; ++up) {
+            std::string vidPath = current + "/idVendor";
+            std::string pidPath = current + "/idProduct";
+            std::string vid, pid;
+            if (readSmallFile(vidPath, vid) && readSmallFile(pidPath, pid)) {
+                // Lowercase for safety
+                std::transform(vid.begin(), vid.end(), vid.begin(), ::tolower);
+                std::transform(pid.begin(), pid.end(), pid.begin(), ::tolower);
+                if (vid == targetVid && pid == targetPid) {
+                    if (m_device.Open(hidraw)) {
+                        return true;
+                    }
+                }
+            }
+            current += "/..";
         }
     }
-    
+
     return false;
 }
 

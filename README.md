@@ -153,3 +153,8 @@ GPL v2 — see `LICENSE`.
 ---
 
 This driver/app is reverse‑engineered and not affiliated with Lian Li. Use at your own risk.
+
+## Acknowledgments
+
+- OpenRGB: Protocol insights and HID communication approach inspired by the OpenRGB project.
+- Cursor AI: Assisted in code authoring and documentation edits.

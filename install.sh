@@ -191,6 +191,16 @@ configure_sensors() {
     fi
 }
 
+# Configure udev rule for HID access to SL-Infinity (RGB)
+configure_udev() {
+    print_info "Configuring udev rule for SL-Infinity HID access..."
+    local RULE_FILE="/etc/udev/rules.d/60-lianli-sl-infinity.rules"
+    echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="a102", TAG+="uaccess", MODE="0666"' | sudo tee "$RULE_FILE" > /dev/null
+    sudo udevadm control --reload
+    sudo udevadm trigger
+    print_success "udev rule installed at $RULE_FILE"
+}
+
 # Install Qt application
 install_application() {
     print_info "Installing L-Connect3 application..."
@@ -292,11 +302,15 @@ main() {
     configure_sensors
     echo ""
     
-    # Step 4: Install application
+    # Step 4: Configure udev (RGB HID access)
+    configure_udev
+    echo ""
+    
+    # Step 5: Install application
     install_application
     echo ""
     
-    # Step 5: Verify installation
+    # Step 6: Verify installation
     verify_installation
     echo ""
     
