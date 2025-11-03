@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(customMessageHandler);
     
     // Set application properties
-    app.setApplicationName("L-Connect 3");
+    app.setApplicationName("LL-Connect 3");
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("L-Connect Linux");
     app.setWindowIcon(QIcon(":/icons/resources/logo.png"));

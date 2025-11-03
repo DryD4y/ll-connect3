@@ -72,7 +72,7 @@ void SystemInfoPage::setupUI()
 
     m_mainLayout->addLayout(m_contentGrid);
 
-    // Apply styles - Updated to match L-Connect 3 reference
+    // Apply styles - Updated to match LL-Connect 3 reference
     setStyleSheet(R"(
         SystemInfoPage {
             background-color: transparent;

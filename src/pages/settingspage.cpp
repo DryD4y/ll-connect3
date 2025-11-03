@@ -97,7 +97,7 @@ void SettingsPage::setupGeneralSettings()
     connect(m_hideOnTrayCheck, &QCheckBox::toggled, this, &SettingsPage::onHideOnTrayToggled);
     
     // Minimize to tray checkbox
-    m_minimizeToTrayCheck = new QCheckBox("Minimize L-Connect 3 to system tray at close");
+    m_minimizeToTrayCheck = new QCheckBox("Minimize LL-Connect 3 to system tray at close");
     m_minimizeToTrayCheck->setObjectName("settingsCheck");
     m_minimizeToTrayCheck->setChecked(true);
     connect(m_minimizeToTrayCheck, &QCheckBox::toggled, this, &SettingsPage::onMinimizeToTrayToggled);

@@ -29,7 +29,7 @@ MainWindow::MainWindow(QWidget *parent)
     applyStyles();
     
     // Set window properties with proper size policies
-    setWindowTitle("L-Connect 3");
+    setWindowTitle("LL-Connect 3");
     setMinimumSize(900, 510);
     // Start near the reference screenshot size
     resize(900, 510);
@@ -106,7 +106,7 @@ void MainWindow::setupSidebar()
     m_logoInitialLabel->setAlignment(Qt::AlignCenter);
     badgeLayout->addWidget(m_logoInitialLabel);
 
-    m_logoLabel = new QLabel("L-CONNECT 3");
+    m_logoLabel = new QLabel("LL-CONNECT 3");
     m_logoLabel->setObjectName("logoLabel");
 
     logoLayout->addWidget(m_logoBadge);

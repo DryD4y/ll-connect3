@@ -1,9 +1,9 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=L-Connect 3
+Name=LL-Connect 3
 GenericName=Fan Controller
-Comment=Linux L-Connect 3 driver and application for Lian Li SL-Infinity fans
+Comment=Linux LL-Connect 3 driver and application for Lian Li SL-Infinity fans
 Exec=LConnect3
 Icon=lconnect3
 Terminal=false
