@@ -208,9 +208,11 @@ GPL v2 — see `LICENSE`.
 
 ---
 
-This driver/app is reverse‑engineered and not affiliated with Lian Li. Use at your own risk.
+### Overview
+LL-Connect3 is a fully self-contained, open-source fan and RGB controller for the Lian Li SL-Infinity Hub and compatible fans.  
+It includes integrated RGB control logic adapted from the OpenRGB project — you do **not** need to install OpenRGB separately.
 
-## Acknowledgments
-
-- OpenRGB: Protocol insights and HID communication approach inspired by the OpenRGB project.
-- Cursor AI: Assisted in code authoring and documentation edits.
+### Credits
+- Portions of the RGB control code are derived from the [OpenRGB](https://openrgb.org/) project and are used under the terms of the GNU General Public License (GPL).  
+- The majority of the implementation was authored with assistance from Cursor AI, while I focused on debugging, testing, and reverse-engineering the hardware protocols.  
+- All modifications and integration work are © 2025 Joey Troy and released under the same license.
