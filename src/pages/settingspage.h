@@ -13,32 +13,24 @@
 #include <QGroupBox>
 #include <QLineEdit>
 
+class LightingPage;
+
 class SettingsPage : public QWidget
 {
     Q_OBJECT
 
 public:
     explicit SettingsPage(QWidget *parent = nullptr);
+    void setLightingPage(LightingPage *lightingPage);
 
 private slots:
-    void onAutoRunToggled();
-    void onHideOnTrayToggled();
-    void onMinimizeToTrayToggled();
-    void onFloatingWindowToggled();
-    void onLanguageChanged();
-    void onTemperatureUnitChanged();
-    void onServiceDelayChanged();
-    void onApplyServiceDelay();
     void onResetAll();
     void onFanPortToggled(int port, bool enabled);
 
 private:
     void setupUI();
-    void setupGeneralSettings();
-    void setupServiceSettings();
     void setupFanConfiguration();
     void setupDebugSettings();
-    void applySettings();
     void loadFanConfiguration();
     void saveFanConfiguration();
     
@@ -50,25 +42,6 @@ private:
     
     // Header
     QLabel *m_titleLabel;
-    QLabel *m_floatingWindowLabel;
-    QFrame *m_toggleFrame;
-    
-    // General settings
-    QGroupBox *m_generalGroup;
-    QCheckBox *m_autoRunCheck;
-    QCheckBox *m_hideOnTrayCheck;
-    QCheckBox *m_minimizeToTrayCheck;
-    QCheckBox *m_floatingWindowCheck;
-    
-    QComboBox *m_languageCombo;
-    QComboBox *m_temperatureCombo;
-    
-    // Service settings
-    QGroupBox *m_serviceGroup;
-    QPushButton *m_serviceButton;
-    QLabel *m_delayLabel;
-    QSpinBox *m_delaySpinBox;
-    QPushButton *m_applyDelayBtn;
     
     // Fan configuration
     QGroupBox *m_fanConfigGroup;
@@ -80,10 +53,14 @@ private:
     // Debug settings
     QGroupBox *m_debugGroup;
     QCheckBox *m_debugModeCheck;
+    QCheckBox *m_debugFanSpeedsCheck;
+    QCheckBox *m_debugFanLightsCheck;
     
     // Action buttons
     QPushButton *m_resetAllBtn;
-    QPushButton *m_applyBtn;
+    
+    // Reference to lighting page for reset
+    LightingPage *m_lightingPage;
 };
 
 #endif // SETTINGSPAGE_H

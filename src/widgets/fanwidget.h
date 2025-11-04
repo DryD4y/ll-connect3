@@ -19,6 +19,7 @@ public:
     void setLighting(const QString &effect);
     void setColor(const QColor &color);
     void setActive(bool active);
+    void setSelected(bool selected);
     
     QColor fanColor() const { return m_fanColor; }
     void setFanColor(const QColor &color);
@@ -41,6 +42,7 @@ private:
     QString m_lighting;
     QColor m_fanColor;
     bool m_active;
+    bool m_selected;
     
     QVBoxLayout *m_layout;
     QLabel *m_rpmLabel;

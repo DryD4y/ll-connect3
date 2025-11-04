@@ -1,4 +1,5 @@
 #include "fanprofilepage.h"
+#include "utils/qtdebugutil.h"
 #include <QHeaderView>
 #include <QFont>
 #include <QTimer>
@@ -1083,9 +1084,9 @@ void FanProfilePage::controlFanSpeeds()
         if (shouldWrite) {
             setFanSpeed(port, gated);
             rpm_out[port] = gated;
-            qDebug() << "Port" << port << ": T=" << Tf << "°C dT/dt=" << dTdt << "°C/s"
-                     << " heating=" << heating << " base=" << base_rpm 
-                     << " target=" << target << " -> RPM=" << rpm_out[port];
+            DEBUG_LOG_CATEGORY("FanSpeeds", "Port", port, ": T=", Tf, "°C dT/dt=", dTdt, "°C/s"
+                     , " heating=", heating, " base=", base_rpm 
+                     , " target=", target, " -> RPM=", rpm_out[port]);
         }
     }
 }
@@ -1129,8 +1130,8 @@ void FanProfilePage::setFanSpeed(int port, int targetRPM)
     }
     
     // Debug: show what we're actually sending
-    qDebug() << "RPM conversion: targetRPM=" << targetRPM << " -> speedPercent=" << speedPercent << "%";
-    qDebug() << "Expected dBA for" << targetRPM << "RPM:" << expectedDBA;
+    DEBUG_LOG_CATEGORY("FanSpeeds", "RPM conversion: targetRPM=", targetRPM, " -> speedPercent=", speedPercent, "%");
+    DEBUG_LOG_CATEGORY("FanSpeeds", "Expected dBA for", targetRPM, "RPM:", expectedDBA);
     
     // Use kernel driver for individual port control (more reliable)
     QString procPath = QString("/proc/Lian_li_SL_INFINITY/Port_%1/fan_speed").arg(port);
@@ -1142,9 +1143,9 @@ void FanProfilePage::setFanSpeed(int port, int targetRPM)
         file.close();
         
         
-        qDebug() << "Set Port" << port << "to" << targetRPM << "RPM (" << speedPercent << "%, expected dBA=" << expectedDBA << ") via kernel driver";
+        DEBUG_LOG_CATEGORY("FanSpeeds", "Set Port", port, "to", targetRPM, "RPM (", speedPercent, "%, expected dBA=", expectedDBA, ") via kernel driver");
     } else {
-        qDebug() << "Failed to open" << procPath << "for writing - falling back to USB HID";
+        DEBUG_LOG_CATEGORY("FanSpeeds", "Failed to open", procPath, "for writing - falling back to USB HID");
         
         // Fallback to USB HID controller if kernel driver fails
         if (m_hidController) {
@@ -1152,9 +1153,9 @@ void FanProfilePage::setFanSpeed(int port, int targetRPM)
             bool success = m_hidController->SetChannelSpeed(channel, speedPercent);
             
             if (success) {
-                qDebug() << "Set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM (" << speedPercent << "%, expected dBA=" << expectedDBA << ") via USB HID fallback";
+                DEBUG_LOG_CATEGORY("FanSpeeds", "Set Port", port, "(Channel", channel, ") to", targetRPM, "RPM (", speedPercent, "%, expected dBA=", expectedDBA, ") via USB HID fallback");
             } else {
-                qDebug() << "Failed to set Port" << port << "(Channel" << channel << ") to" << targetRPM << "RPM via USB HID fallback";
+                DEBUG_LOG_CATEGORY("FanSpeeds", "Failed to set Port", port, "(Channel", channel, ") to", targetRPM, "RPM via USB HID fallback");
             }
         } else {
             qDebug() << "HID controller not available for Port" << port;
@@ -1305,8 +1306,8 @@ int FanProfilePage::calculateRPMForLoad(int temperature, int cpuLoad, int gpuLoa
     // Clamp to valid range
     finalRPM = qMax(0, qMin(2100, finalRPM));
     
-    qDebug() << "Load-based RPM: temp=" << temperature << "°C, CPU=" << cpuLoad << "%, GPU=" << gpuLoad 
-             << "%, baseRPM=" << baseRPM << ", loadBoost=" << loadBoost << ", finalRPM=" << finalRPM;
+    DEBUG_LOG_CATEGORY("FanSpeeds", "Load-based RPM: temp=", temperature, "°C, CPU=", cpuLoad, "%, GPU=", gpuLoad 
+             , "%, baseRPM=", baseRPM, ", loadBoost=", loadBoost, ", finalRPM=", finalRPM);
     
     return finalRPM;
 }
@@ -1426,16 +1427,16 @@ void FanProfilePage::onFanSizeChanged(int port)
     // Update the max RPM based on fan size
     if (fanSize == "120MM") {
         m_fanSizeMaxRPM[port] = 2100;
-        qDebug() << "Port" << port << "fan size changed to 120mm (2100 RPM max)";
+        DEBUG_LOG_CATEGORY("FanSpeeds", "Port", port, "fan size changed to 120mm (2100 RPM max)");
     } else if (fanSize == "140MM") {
         m_fanSizeMaxRPM[port] = 1600;
-        qDebug() << "Port" << port << "fan size changed to 140mm (1600 RPM max)";
+        DEBUG_LOG_CATEGORY("FanSpeeds", "Port", port, "fan size changed to 140mm (1600 RPM max)");
     }
     
     // If this is the currently selected port, update the graph
     if (port == m_selectedPort) {
         m_fanCurveWidget->setFanSize(m_fanSizeMaxRPM[port]);
-        qDebug() << "Updated graph to show" << m_fanSizeMaxRPM[port] << "RPM max for Port" << port;
+        DEBUG_LOG_CATEGORY("FanSpeeds", "Updated graph to show", m_fanSizeMaxRPM[port], "RPM max for Port", port);
     }
 }
 

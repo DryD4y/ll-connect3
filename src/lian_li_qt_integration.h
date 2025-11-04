@@ -37,8 +37,12 @@ public:
     
     // RGB Control
     bool setChannelColor(int channel, const QColor &color, int brightness = 100);
+    bool setChannelStaticWithFanColors(int channel, const QColor colors[4], int brightness = 100);
     bool setChannelMode(int channel, int mode);
     bool setChannelBreathing(int channel, const QColor &color, int speed = 50, int brightness = 100);
+    bool setChannelMeteor(int channel, const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelMeteorWithFanColors(int channel, const QColor colors[4], int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelMeteorWithColors(int channel, const QColor colors[2], int speed = 50, int brightness = 100, bool directionLeft = false);
     bool turnOffChannel(int channel);
     bool turnOffAllChannels();
     
@@ -49,6 +53,31 @@ public:
     bool setBreathingEffect(const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
     bool setMeteorEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
     bool setRunwayEffect(int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelRunway(int channel, const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    
+    // All OpenRGB effects
+    bool setChannelEffect(int channel, uint8_t mode, const QColor &color = QColor(), int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelEffectWithColors(int channel, uint8_t mode, const QColor colors[4], int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setAllChannelsEffect(uint8_t mode, const QColor &color = QColor(), int speed = 50, int brightness = 100, bool directionLeft = false);
+    
+    // Specific effect methods
+    bool setStaggeredEffect(const QColor &color, int speed = 50, int brightness = 100);
+    bool setChannelStaggered(int channel, const QColor colors[2], int speed = 50, int brightness = 100);
+    bool setTideEffect(const QColor colors[2], int speed = 50, int brightness = 100);
+    bool setChannelTide(int channel, const QColor colors[2], int speed = 50, int brightness = 100);
+    bool setMixingEffect(const QColor &color, int speed = 50, int brightness = 100);
+    bool setChannelMixing(int channel, const QColor colors[2], int speed = 50, int brightness = 100);
+    bool setStackEffect(const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelStack(int channel, const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setNeonEffect(int speed = 50, int brightness = 100);
+    bool setColorCycleEffect(const QColor colors[3], int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelColorCycle(int channel, const QColor colors[3], int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setVoiceEffect(int speed = 50, int brightness = 100);
+    bool setChannelRunwayWithColors(int channel, const QColor colors[2], int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setGrooveEffect(const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelGroove(int channel, const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setTunnelEffect(const QColor &color, int speed = 50, int brightness = 100, bool directionLeft = false);
+    bool setChannelTunnel(int channel, const QColor colors[4], int speed = 50, int brightness = 100, bool directionLeft = false);
     
     // Helper to convert percentage values to hardware values
     static uint8_t convertSpeed(int speedPercent);

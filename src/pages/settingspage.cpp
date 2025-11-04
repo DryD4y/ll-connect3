@@ -1,19 +1,24 @@
 #include "settingspage.h"
+#include "lightingpage.h"
 #include <QSettings>
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
+#include <QMessageBox>
 
 SettingsPage::SettingsPage(QWidget *parent)
     : QWidget(parent)
+    , m_lightingPage(nullptr)
 {
     setupUI();
-    setupGeneralSettings();
-    setupServiceSettings();
     setupFanConfiguration();
     setupDebugSettings();
     loadFanConfiguration();
-    applySettings();
+}
+
+void SettingsPage::setLightingPage(LightingPage *lightingPage)
+{
+    m_lightingPage = lightingPage;
 }
 
 void SettingsPage::setupUI()
@@ -26,20 +31,11 @@ void SettingsPage::setupUI()
     m_headerLayout = new QHBoxLayout();
     m_headerLayout->setContentsMargins(0, 0, 0, 0);
     
-    m_titleLabel = new QLabel("General");
+    m_titleLabel = new QLabel("Settings");
     m_titleLabel->setObjectName("pageTitle");
-    
-    m_floatingWindowLabel = new QLabel("Displays a floating system information window");
-    m_floatingWindowLabel->setObjectName("floatingWindowLabel");
-    
-    m_toggleFrame = new QFrame();
-    m_toggleFrame->setObjectName("toggleFrame");
-    m_toggleFrame->setFixedSize(50, 24);
     
     m_headerLayout->addWidget(m_titleLabel);
     m_headerLayout->addStretch();
-    m_headerLayout->addWidget(m_floatingWindowLabel);
-    m_headerLayout->addWidget(m_toggleFrame);
     
     m_mainLayout->addLayout(m_headerLayout);
     
@@ -63,96 +59,6 @@ void SettingsPage::setupUI()
             font-weight: bold;
         }
         
-        #floatingWindowLabel {
-            color: #cccccc;
-            font-size: 14px;
-        }
-        
-        #toggleFrame {
-            background-color: #2a82da;
-            border-radius: 12px;
-            border: none;
-        }
-    )");
-}
-
-void SettingsPage::setupGeneralSettings()
-{
-    m_generalGroup = new QGroupBox("General Settings");
-    m_generalGroup->setObjectName("settingsGroup");
-    
-    QVBoxLayout *generalLayout = new QVBoxLayout(m_generalGroup);
-    generalLayout->setSpacing(15);
-    
-    // Auto-run checkbox
-    m_autoRunCheck = new QCheckBox("Auto-Run on boot");
-    m_autoRunCheck->setObjectName("settingsCheck");
-    m_autoRunCheck->setChecked(true);
-    connect(m_autoRunCheck, &QCheckBox::toggled, this, &SettingsPage::onAutoRunToggled);
-    
-    // Hide on tray checkbox
-    m_hideOnTrayCheck = new QCheckBox("Hide on system tray when auto run on boot");
-    m_hideOnTrayCheck->setObjectName("settingsCheck");
-    m_hideOnTrayCheck->setChecked(true);
-    connect(m_hideOnTrayCheck, &QCheckBox::toggled, this, &SettingsPage::onHideOnTrayToggled);
-    
-    // Minimize to tray checkbox
-    m_minimizeToTrayCheck = new QCheckBox("Minimize LL-Connect 3 to system tray at close");
-    m_minimizeToTrayCheck->setObjectName("settingsCheck");
-    m_minimizeToTrayCheck->setChecked(true);
-    connect(m_minimizeToTrayCheck, &QCheckBox::toggled, this, &SettingsPage::onMinimizeToTrayToggled);
-    
-    // Floating window checkbox
-    m_floatingWindowCheck = new QCheckBox("Displays a floating system information window");
-    m_floatingWindowCheck->setObjectName("settingsCheck");
-    m_floatingWindowCheck->setChecked(true);
-    connect(m_floatingWindowCheck, &QCheckBox::toggled, this, &SettingsPage::onFloatingWindowToggled);
-    
-    generalLayout->addWidget(m_autoRunCheck);
-    generalLayout->addWidget(m_hideOnTrayCheck);
-    generalLayout->addWidget(m_minimizeToTrayCheck);
-    generalLayout->addWidget(m_floatingWindowCheck);
-    
-    // Language selection
-    QHBoxLayout *languageLayout = new QHBoxLayout();
-    QLabel *languageLabel = new QLabel("Language:");
-    languageLabel->setObjectName("settingsLabel");
-    
-    m_languageCombo = new QComboBox();
-    m_languageCombo->setObjectName("settingsCombo");
-    m_languageCombo->addItems({"English", "中文", "日本語", "한국어", "Français", "Deutsch", "Español"});
-    m_languageCombo->setCurrentText("English");
-    connect(m_languageCombo, QOverload<const QString &>::of(&QComboBox::currentTextChanged),
-            this, &SettingsPage::onLanguageChanged);
-    
-    languageLayout->addWidget(languageLabel);
-    languageLayout->addWidget(m_languageCombo);
-    languageLayout->addStretch();
-    
-    generalLayout->addLayout(languageLayout);
-    
-    // Temperature unit selection
-    QHBoxLayout *tempLayout = new QHBoxLayout();
-    QLabel *tempLabel = new QLabel("Temperature display:");
-    tempLabel->setObjectName("settingsLabel");
-    
-    m_temperatureCombo = new QComboBox();
-    m_temperatureCombo->setObjectName("settingsCombo");
-    m_temperatureCombo->addItems({"Celsius", "Fahrenheit"});
-    m_temperatureCombo->setCurrentText("Celsius");
-    connect(m_temperatureCombo, QOverload<const QString &>::of(&QComboBox::currentTextChanged),
-            this, &SettingsPage::onTemperatureUnitChanged);
-    
-    tempLayout->addWidget(tempLabel);
-    tempLayout->addWidget(m_temperatureCombo);
-    tempLayout->addStretch();
-    
-    generalLayout->addLayout(tempLayout);
-    
-    m_leftLayout->addWidget(m_generalGroup);
-    
-    // Apply general settings styles
-    setStyleSheet(R"(
         #settingsGroup {
             color: #ffffff;
             font-size: 14px;
@@ -173,113 +79,6 @@ void SettingsPage::setupGeneralSettings()
             min-width: 120px;
         }
         
-        #settingsCombo {
-            background-color: #404040;
-            color: #ffffff;
-            border: 1px solid #555555;
-            border-radius: 4px;
-            padding: 6px;
-            min-width: 120px;
-        }
-    )");
-}
-
-void SettingsPage::setupServiceSettings()
-{
-    m_serviceGroup = new QGroupBox("Service & Software");
-    m_serviceGroup->setObjectName("settingsGroup");
-    
-    QVBoxLayout *serviceLayout = new QVBoxLayout(m_serviceGroup);
-    serviceLayout->setSpacing(15);
-    
-    // Service button
-    m_serviceButton = new QPushButton("Service & Software");
-    m_serviceButton->setObjectName("serviceButton");
-    
-    serviceLayout->addWidget(m_serviceButton);
-    
-    // Delay settings
-    QHBoxLayout *delayLayout = new QHBoxLayout();
-    
-    QLabel *delayTextLabel = new QLabel("Delay the service startup by");
-    delayTextLabel->setObjectName("settingsLabel");
-    
-    m_delaySpinBox = new QSpinBox();
-    m_delaySpinBox->setObjectName("delaySpinBox");
-    m_delaySpinBox->setRange(0, 60);
-    m_delaySpinBox->setValue(3);
-    m_delaySpinBox->setSuffix(" second(s)");
-    
-    m_applyDelayBtn = new QPushButton("Apply");
-    m_applyDelayBtn->setObjectName("applyButton");
-    
-    connect(m_applyDelayBtn, &QPushButton::clicked, this, &SettingsPage::onApplyServiceDelay);
-    
-    delayLayout->addWidget(delayTextLabel);
-    delayLayout->addWidget(m_delaySpinBox);
-    delayLayout->addWidget(m_applyDelayBtn);
-    delayLayout->addStretch();
-    
-    serviceLayout->addLayout(delayLayout);
-    
-    m_rightLayout->addWidget(m_serviceGroup);
-    
-    // Action buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    
-    m_resetAllBtn = new QPushButton("Reset All");
-    m_resetAllBtn->setObjectName("actionButton");
-    
-    m_applyBtn = new QPushButton("Apply");
-    m_applyBtn->setObjectName("actionButton");
-    
-    connect(m_resetAllBtn, &QPushButton::clicked, this, &SettingsPage::onResetAll);
-    
-    buttonLayout->addWidget(m_resetAllBtn);
-    buttonLayout->addWidget(m_applyBtn);
-    buttonLayout->addStretch();
-    
-    m_rightLayout->addLayout(buttonLayout);
-    m_rightLayout->addStretch();
-    
-    // Apply service settings styles
-    setStyleSheet(R"(
-        #serviceButton {
-            background-color: #2a82da;
-            color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        
-        #serviceButton:hover {
-            background-color: #1e6bb8;
-        }
-        
-        #delaySpinBox {
-            background-color: #404040;
-            color: #ffffff;
-            border: 1px solid #555555;
-            border-radius: 4px;
-            padding: 6px;
-            min-width: 100px;
-        }
-        
-        #applyButton {
-            background-color: #2a82da;
-            color: #ffffff;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        
-        #applyButton:hover {
-            background-color: #1e6bb8;
-        }
-        
         #actionButton {
             background-color: #2a82da;
             color: #ffffff;
@@ -297,72 +96,81 @@ void SettingsPage::setupServiceSettings()
     )");
 }
 
-void SettingsPage::applySettings()
-{
-    // Apply current settings
-    onFloatingWindowToggled();
-}
-
-void SettingsPage::onAutoRunToggled()
-{
-    bool enabled = m_autoRunCheck->isChecked();
-    // Handle auto-run setting
-}
-
-void SettingsPage::onHideOnTrayToggled()
-{
-    bool enabled = m_hideOnTrayCheck->isChecked();
-    // Handle hide on tray setting
-}
-
-void SettingsPage::onMinimizeToTrayToggled()
-{
-    bool enabled = m_minimizeToTrayCheck->isChecked();
-    // Handle minimize to tray setting
-}
-
-void SettingsPage::onFloatingWindowToggled()
-{
-    bool enabled = m_floatingWindowCheck->isChecked();
-    m_toggleFrame->setStyleSheet(enabled ? 
-        "background-color: #2a82da;" : 
-        "background-color: #404040;");
-}
-
-void SettingsPage::onLanguageChanged()
-{
-    QString language = m_languageCombo->currentText();
-    // Handle language change
-}
-
-void SettingsPage::onTemperatureUnitChanged()
-{
-    QString unit = m_temperatureCombo->currentText();
-    // Handle temperature unit change
-}
-
-void SettingsPage::onServiceDelayChanged()
-{
-    int delay = m_delaySpinBox->value();
-    // Handle service delay change
-}
-
-void SettingsPage::onApplyServiceDelay()
-{
-    int delay = m_delaySpinBox->value();
-    // Apply service delay setting
-}
-
 void SettingsPage::onResetAll()
 {
-    // Reset all settings to default
-    m_autoRunCheck->setChecked(true);
-    m_hideOnTrayCheck->setChecked(true);
-    m_minimizeToTrayCheck->setChecked(true);
-    m_floatingWindowCheck->setChecked(true);
-    m_languageCombo->setCurrentText("English");
-    m_temperatureCombo->setCurrentText("Celsius");
-    m_delaySpinBox->setValue(3);
+    // Show confirmation dialog with information about what will be reset
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("Reset All Settings");
+    msgBox.setText("Reset All Settings");
+    msgBox.setInformativeText(
+        "This will reset ALL application settings to their default values:\n\n"
+        "• Fan Port Configuration (all ports enabled)\n"
+        "• Debug Mode (disabled)\n"
+        "• Lighting Effects (Rainbow Wave)\n"
+        "• Lighting Colors (Red, Blue, Green, Yellow per port)\n"
+        "• Lighting Speed (75)\n"
+        "• Lighting Brightness (100)\n"
+        "• Fan Profiles (all ports reset to Quiet)\n"
+        "• Fan Curves (default profiles)\n"
+        "• Custom Profiles (cleared)\n\n"
+        "This action cannot be undone. Continue?"
+    );
+    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    msgBox.setDefaultButton(QMessageBox::No);
+    msgBox.setIcon(QMessageBox::Question);
+    
+    int ret = msgBox.exec();
+    if (ret != QMessageBox::Yes) {
+        return; // User cancelled
+    }
+    
+    // Clear all QSettings groups
+    {
+        // Clear main application settings
+        QSettings mainSettings("LianLi", "LConnect3");
+        mainSettings.clear();
+        mainSettings.sync();
+    }
+    
+    {
+        // Clear lighting settings
+        QSettings lightingSettings("LConnect3", "Lighting");
+        lightingSettings.clear();
+        lightingSettings.sync();
+    }
+    
+    {
+        // Clear fan profile settings
+        QSettings fanProfileSettings("LConnect3", "FanProfile");
+        fanProfileSettings.clear();
+        fanProfileSettings.sync();
+    }
+    
+    {
+        // Clear fan curve settings
+        QSettings fanCurveSettings("LConnect3", "FanCurves");
+        fanCurveSettings.clear();
+        fanCurveSettings.sync();
+    }
+    
+    {
+        // Clear custom profiles
+        QSettings customProfileSettings("LConnect3", "CustomProfiles");
+        customProfileSettings.clear();
+        customProfileSettings.sync();
+    }
+    
+    {
+        // Clear port profiles
+        QSettings portProfileSettings("LConnect3", "PortProfiles");
+        portProfileSettings.clear();
+        portProfileSettings.sync();
+    }
+    
+    // Reset UI to default values
+    m_debugModeCheck->setChecked(false);
+    m_debugFanSpeedsCheck->setChecked(false);
+    m_debugFanLightsCheck->setChecked(false);
     
     // Reset fan configuration to all enabled
     m_fanPort1Check->setChecked(true);
@@ -370,7 +178,20 @@ void SettingsPage::onResetAll()
     m_fanPort3Check->setChecked(true);
     m_fanPort4Check->setChecked(true);
     
-    applySettings();
+    // Save the reset values
+    saveFanConfiguration();
+    
+    // Reset lighting page colors and settings if available
+    if (m_lightingPage) {
+        m_lightingPage->resetToDefaults();
+    }
+    
+    // Show success message
+    QMessageBox::information(this, "Reset Complete", 
+        "All settings have been reset to their default values.\n\n"
+        "You may need to navigate to the Lighting page to see the changes applied.");
+    
+    qDebug() << "All settings and colors have been reset to defaults";
 }
 
 void SettingsPage::setupFanConfiguration()
@@ -429,6 +250,14 @@ void SettingsPage::setupFanConfiguration()
     fanLayout->addWidget(infoLabel);
     
     m_rightLayout->addWidget(m_fanConfigGroup);
+    
+    // Reset All button
+    m_resetAllBtn = new QPushButton("Reset All");
+    m_resetAllBtn->setObjectName("actionButton");
+    connect(m_resetAllBtn, &QPushButton::clicked, this, &SettingsPage::onResetAll);
+    
+    m_rightLayout->addWidget(m_resetAllBtn);
+    m_rightLayout->addStretch();
 }
 
 void SettingsPage::onFanPortToggled(int port, bool enabled)
@@ -524,13 +353,15 @@ void SettingsPage::setupDebugSettings()
     descLabel->setWordWrap(true);
     debugLayout->addWidget(descLabel);
     
-    // Debug mode checkbox
-    m_debugModeCheck = new QCheckBox("Enable Debug Mode");
-    m_debugModeCheck->setObjectName("settingsCheck");
-    
-    // Load current setting
+    // Load current settings
     QSettings settings("LianLi", "LConnect3");
     bool debugEnabled = settings.value("Debug/Enabled", false).toBool();
+    bool debugFanSpeeds = settings.value("Debug/FanSpeeds", false).toBool();
+    bool debugFanLights = settings.value("Debug/FanLights", false).toBool();
+    
+    // Debug mode checkbox (master control)
+    m_debugModeCheck = new QCheckBox("Enable Debug Mode");
+    m_debugModeCheck->setObjectName("settingsCheck");
     m_debugModeCheck->setChecked(debugEnabled);
     
     connect(m_debugModeCheck, &QCheckBox::toggled, [](bool checked) {
@@ -547,8 +378,40 @@ void SettingsPage::setupDebugSettings()
     
     debugLayout->addWidget(m_debugModeCheck);
     
+    // Fan speeds debug checkbox
+    m_debugFanSpeedsCheck = new QCheckBox("Debug Fan Speeds");
+    m_debugFanSpeedsCheck->setObjectName("settingsCheck");
+    m_debugFanSpeedsCheck->setChecked(debugFanSpeeds);
+    m_debugFanSpeedsCheck->setEnabled(debugEnabled);
+    
+    connect(m_debugFanSpeedsCheck, &QCheckBox::toggled, [](bool checked) {
+        QSettings settings("LianLi", "LConnect3");
+        settings.setValue("Debug/FanSpeeds", checked);
+        settings.sync();
+    });
+    
+    connect(m_debugModeCheck, &QCheckBox::toggled, m_debugFanSpeedsCheck, &QCheckBox::setEnabled);
+    
+    debugLayout->addWidget(m_debugFanSpeedsCheck);
+    
+    // Fan lights debug checkbox
+    m_debugFanLightsCheck = new QCheckBox("Debug Fan Lights (RGB)");
+    m_debugFanLightsCheck->setObjectName("settingsCheck");
+    m_debugFanLightsCheck->setChecked(debugFanLights);
+    m_debugFanLightsCheck->setEnabled(debugEnabled);
+    
+    connect(m_debugFanLightsCheck, &QCheckBox::toggled, [](bool checked) {
+        QSettings settings("LianLi", "LConnect3");
+        settings.setValue("Debug/FanLights", checked);
+        settings.sync();
+    });
+    
+    connect(m_debugModeCheck, &QCheckBox::toggled, m_debugFanLightsCheck, &QCheckBox::setEnabled);
+    
+    debugLayout->addWidget(m_debugFanLightsCheck);
+    
     // Info label
-    QLabel *infoLabel = new QLabel("When enabled, detailed diagnostic information will be printed to the console. Requires application restart to take full effect.");
+    QLabel *infoLabel = new QLabel("When enabled, detailed diagnostic information will be printed to the console. You can enable specific debug categories below. Requires application restart to take full effect.");
     infoLabel->setObjectName("infoLabel");
     infoLabel->setWordWrap(true);
     infoLabel->setStyleSheet("color: #888888; font-size: 11px; font-style: italic;");

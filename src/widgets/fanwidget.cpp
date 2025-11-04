@@ -13,6 +13,7 @@ FanWidget::FanWidget(int port, int fan, QWidget *parent)
     , m_lighting("Rainbow")
     , m_fanColor(QColor(42, 130, 218))
     , m_active(true)
+    , m_selected(false)
 {
     setupUI();
     updateAnimation();
@@ -27,17 +28,11 @@ void FanWidget::setupUI()
     m_layout->setContentsMargins(5, 5, 5, 5);
     m_layout->setSpacing(2);
     
-    // RPM label
-    m_rpmLabel = new QLabel("0 RPM");
-    m_rpmLabel->setObjectName("rpmLabel");
-    m_rpmLabel->setAlignment(Qt::AlignCenter);
-    
-    // Lighting label
-    m_lightingLabel = new QLabel("Rainbow");
+    // Port/Fan label (no RPM)
+    m_lightingLabel = new QLabel(QString("Port %1\nFan %2").arg(m_port + 1).arg(m_fan + 1));
     m_lightingLabel->setObjectName("lightingLabel");
     m_lightingLabel->setAlignment(Qt::AlignCenter);
     
-    m_layout->addWidget(m_rpmLabel);
     m_layout->addWidget(m_lightingLabel);
     
     // Initialize color animation
@@ -69,7 +64,7 @@ void FanWidget::setupUI()
 void FanWidget::setRPM(int rpm)
 {
     m_rpm = rpm;
-    m_rpmLabel->setText(QString::number(rpm) + " RPM");
+    // RPM display removed - widget now focuses on color selection
 }
 
 void FanWidget::setProfile(const QString &profile)
@@ -93,6 +88,12 @@ void FanWidget::setColor(const QColor &color)
 void FanWidget::setActive(bool active)
 {
     m_active = active;
+    update();
+}
+
+void FanWidget::setSelected(bool selected)
+{
+    m_selected = selected;
     update();
 }
 
@@ -164,12 +165,14 @@ void FanWidget::paintEvent(QPaintEvent *event)
     painter.setBrush(QBrush(QColor(40, 40, 40)));
     painter.drawEllipse(center, static_cast<int>(radius * 0.2), static_cast<int>(radius * 0.2));
     
-    // Draw inactive state
-    if (!m_active) {
-        painter.setPen(QPen(QColor(100, 100, 100), 1));
-        painter.setBrush(QBrush(QColor(100, 100, 100, 100)));
-        painter.drawEllipse(rect);
+    // Draw selection border if selected
+    if (m_selected) {
+        painter.setPen(QPen(QColor(42, 130, 218), 3)); // Blue border for selected
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(rect.adjusted(-2, -2, 2, 2));
     }
+    
+    // All fans look the same - no special inactive overlay
 }
 
 void FanWidget::mousePressEvent(QMouseEvent *event)

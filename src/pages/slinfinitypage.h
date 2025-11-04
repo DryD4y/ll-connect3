@@ -25,15 +25,12 @@ public:
     explicit SLInfinityPage(QWidget *parent = nullptr);
 
 private slots:
-    void onProfileChanged();
     void onEffectChanged();
     void onSpeedChanged(int value);
     void onBrightnessChanged(int value);
     void onDirectionChanged();
     void onApplyToAll();
     void onDefault();
-    void onExport();
-    void onImport();
     void onColorButtonClicked();
     void onDeviceConnected();
     void onDeviceDisconnected();
@@ -43,6 +40,12 @@ private:
     void setupFanVisualization();
     void setupControls();
     void updateFanVisualization();
+    void applyCurrentEffect();
+    void selectPort(int port);
+    void updatePortSelection();
+    void saveLightingSettings();
+    void loadLightingSettings();
+    void clearOldEffectSettings(const QString &oldEffect, const QString &newEffect);
     
     QVBoxLayout *m_mainLayout;
     QHBoxLayout *m_headerLayout;
@@ -52,18 +55,11 @@ private:
     
     // Header
     QLabel *m_controllerLabel;
-    QPushButton *m_exportBtn;
-    QPushButton *m_importBtn;
     
     // Fan visualization
     QGroupBox *m_fanGroup;
     QGridLayout *m_fanGrid;
     FanWidget *m_fanWidgets[4][4]; // 4 ports, 4 fans each
-    
-    // Fan profile controls
-    QGroupBox *m_profileGroup;
-    QComboBox *m_profileCombo;
-    QPushButton *m_applyToAllBtn;
     
     // Lighting controls
     QGroupBox *m_lightingGroup;
@@ -83,11 +79,21 @@ private:
     int m_currentBrightness;
     bool m_directionLeft;
     
+    // Selected port(s) - -1 means none selected, single port 0-3, or use QSet for multiple
+    int m_selectedPort; // -1 = none, 0-3 = port index
+    
+    // Color storage - per port (4 ports, up to 3 colors per effect)
+    QColor m_portColors[4][4]; // [port][color_index] - supports up to 4 colors per port
+    
     // Lian Li integration
     LianLiQtIntegration *m_lianLi;
     QPushButton *m_colorButton;
+    QPushButton *m_colorButtons[4]; // For multiple color selection (Tide: 2, ColorCycle: 3)
+    QLabel *m_colorLabel;
+    QLabel *m_directionLabel;
     QLabel *m_statusLabel;
     QTimer *m_statusTimer;
+    QWidget *m_multiColorWidget; // Container for multiple color buttons
 };
 
 #endif // SLINFINITYPAGE_H

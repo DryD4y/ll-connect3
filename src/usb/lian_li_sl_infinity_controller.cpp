@@ -9,6 +9,7 @@
 \*---------------------------------------------------------*/
 
 #include "lian_li_sl_infinity_controller.h"
+#include "../utils/debugutil.h"
 #include <iostream>
 #include <cstring>
 #include <chrono>
@@ -391,10 +392,10 @@ bool LianLiSLInfinityController::SetChannelSpeed(uint8_t channel, uint8_t speed)
         file << (int)speed;
         file.close();
         
-        std::cout << "Successfully set Port " << (channel + 1) << " to " << (int)speed << "% via kernel driver" << std::endl;
+        DEBUG_PRINTF_CATEGORY("FanSpeeds", "Successfully set Port %d to %d%% via kernel driver\n", (channel + 1), (int)speed);
         return true;
     } else {
-        std::cout << "Failed to open " << procPath << " for writing" << std::endl;
+        DEBUG_PRINTF_CATEGORY("FanSpeeds", "Failed to open %s for writing\n", procPath.c_str());
         return false;
     }
 }
@@ -470,7 +471,7 @@ bool LianLiSLInfinityController::GetChannelSpeed(uint8_t channel, uint8_t& speed
         
         if (speedValue >= 0 && speedValue <= 100) {
             speed = static_cast<uint8_t>(speedValue);
-            std::cout << "Read Port " << (channel + 1) << " speed: " << (int)speed << "% from kernel driver" << std::endl;
+            DEBUG_PRINTF_CATEGORY("FanSpeeds", "Read Port %d speed: %d%% from kernel driver\n", (channel + 1), (int)speed);
             return true;
         } else {
             std::cout << "Invalid speed value read from kernel driver: " << speedValue << std::endl;

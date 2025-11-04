@@ -17,5 +17,16 @@ bool isDebugEnabled() {
     return settings.value("Debug/Enabled", false).toBool();
 }
 
+bool isDebugCategoryEnabled(const char* category) {
+    QSettings settings("LianLi", "LConnect3");
+    // First check if debug mode is enabled
+    if (!settings.value("Debug/Enabled", false).toBool()) {
+        return false;
+    }
+    // Then check if the specific category is enabled
+    QString categoryKey = QString("Debug/%1").arg(category);
+    return settings.value(categoryKey, false).toBool();
+}
+
 } // namespace DebugUtil
 

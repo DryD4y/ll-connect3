@@ -22,7 +22,6 @@ QT_END_NAMESPACE
 class SystemInfoPage;
 class FanProfilePage;
 class LightingPage;
-class SLInfinityPage;
 class SettingsPage;
 
 class MainWindow : public QMainWindow
@@ -61,7 +60,6 @@ private:
     QPushButton *m_systemInfoBtn;
     QPushButton *m_fanProfileBtn;
     QPushButton *m_lightingBtn;
-    QPushButton *m_slInfinityBtn;
     QPushButton *m_settingsBtn;
     QLabel *m_versionLabel;
     
@@ -81,7 +79,6 @@ private:
     SystemInfoPage *m_systemInfoPage;
     FanProfilePage *m_fanProfilePage;
     LightingPage *m_lightingPage;
-    SLInfinityPage *m_slInfinityPage;
     SettingsPage *m_settingsPage;
     
     // Current page tracking

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(LConnect3 VERSION 1.0.0 LANGUAGES CXX)
+project(LLConnect3 VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -84,13 +84,13 @@ set(HEADERS
 )
 
 # Create executable
-add_executable(LConnect3 ${SOURCES} ${HEADERS} ${RESOURCES})
+add_executable(LLConnect3 ${SOURCES} ${HEADERS} ${RESOURCES})
 
 # Include directories
-target_include_directories(LConnect3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(LLConnect3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Link Qt6 libraries
-target_link_libraries(LConnect3
+target_link_libraries(LLConnect3
     Qt6::Core
     Qt6::Widgets
     lian_li_qt_integration
@@ -99,10 +99,10 @@ target_link_libraries(LConnect3
 )
 
 # Add hidapi include directories
-target_include_directories(LConnect3 PRIVATE ${HIDAPI_INCLUDE_DIRS})
+target_include_directories(LLConnect3 PRIVATE ${HIDAPI_INCLUDE_DIRS})
 
 # Set target properties
-set_target_properties(LConnect3 PROPERTIES
+set_target_properties(LLConnect3 PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
 )
@@ -110,24 +110,24 @@ set_target_properties(LConnect3 PROPERTIES
 
 # Enable High DPI support
 if(WIN32)
-    set_target_properties(LConnect3 PROPERTIES
+    set_target_properties(LLConnect3 PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
     # Add High DPI manifest for Windows
-    target_compile_definitions(LConnect3 PRIVATE
+    target_compile_definitions(LLConnect3 PRIVATE
         QT_AUTO_SCREEN_SCALE_FACTOR=1
         QT_ENABLE_HIGHDPI_SCALING=1
     )
 endif()
 
 # Set High DPI properties for all platforms
-target_compile_definitions(LConnect3 PRIVATE
+target_compile_definitions(LLConnect3 PRIVATE
     QT_AUTO_SCREEN_SCALE_FACTOR=1
     QT_ENABLE_HIGHDPI_SCALING=1
 )
 
 # Install target
-install(TARGETS LConnect3
+install(TARGETS LLConnect3
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )

@@ -60,7 +60,8 @@ public:
     std::string GetSerialNumber() const;
     
     // LED control
-    bool SetChannelColors(uint8_t channel, const std::vector<SLInfinityColor>& colors);
+    // patternType: true = interleaved (for Tunnel), false = solid per fan (for Static)
+    bool SetChannelColors(uint8_t channel, const std::vector<SLInfinityColor>& colors, float brightness = 1.0f, bool interleavedPattern = false);
     bool SetChannelMode(uint8_t channel, uint8_t mode);
     bool TurnOffChannel(uint8_t channel);
     bool TurnOffAllChannels();

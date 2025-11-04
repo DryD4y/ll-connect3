@@ -227,7 +227,7 @@ install_application() {
     sudo make install
     
     # Verify installation
-    if command -v LConnect3 &> /dev/null; then
+    if command -v LLConnect3 &> /dev/null; then
         print_success "Application installed successfully"
     else
         print_error "Application installation verification failed!"
@@ -263,10 +263,10 @@ verify_installation() {
     fi
     
     # Check application
-    if command -v LConnect3 &> /dev/null; then
-        print_success "✓ LConnect3 application is installed"
+    if command -v LLConnect3 &> /dev/null; then
+        print_success "✓ LLConnect3 application is installed"
     else
-        print_error "✗ LConnect3 application not found"
+        print_error "✗ LLConnect3 application not found"
     fi
     
     # Check desktop file
@@ -317,7 +317,7 @@ main() {
     print_success "Installation complete!"
     echo ""
     print_info "You can now:"
-    echo "  - Launch the application: LConnect3"
+    echo "  - Launch the application: LLConnect3"
     echo "  - Control fans via /proc/Lian_li_SL_INFINITY/Port_X/fan_speed"
     echo "  - Check module status: lsmod | grep Lian_Li"
     echo ""

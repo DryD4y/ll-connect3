@@ -13,7 +13,6 @@
 
 class CustomSlider;
 class LianLiQtIntegration;
-class FanLightingWidget;
 
 class LightingPage : public QWidget
 {
@@ -21,6 +20,7 @@ class LightingPage : public QWidget
 
 public:
     explicit LightingPage(QWidget *parent = nullptr);
+    void resetToDefaults();
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -38,13 +38,15 @@ private slots:
 private:
     void setupUI();
     void setupControls();
-    void setupProductDemo();
-    void updateLightingPreview();
     void updateColorButton(int portIndex);
     void saveLightingSettings();
     void loadLightingSettings();
+    void saveEffectColors(const QString &effectName);
+    void loadEffectColors(const QString &effectName);
     void loadFanConfiguration();
     void updatePortButtonStates();
+    void applyCurrentEffect();
+    void clearOldEffectSettings(const QString &oldEffect, const QString &newEffect);
     
     QVBoxLayout *m_mainLayout;
     QHBoxLayout *m_contentLayout;
@@ -62,24 +64,24 @@ private:
     QPushButton *m_leftDirectionBtn;
     QPushButton *m_rightDirectionBtn;
     
-    // Static Color specific controls
+    // Static Color specific controls (also used for Breathing and Meteor)
     QWidget *m_staticColorWidget;
     QHBoxLayout *m_colorBoxLayout;
-    QPushButton *m_colorButtons[4]; // One for each port
+    QLabel *m_colorLabel; // Label that changes for Meteor mode
+    QPushButton *m_colorButtons[4]; // One for each port/fan
+    QLabel *m_colorLabels[4]; // Labels that change for Meteor mode
     
     QPushButton *m_applyBtn;
     
-    // Product demo
-    QLabel *m_demoLabel;
-    FanLightingWidget *m_fanLightingWidget;
     
     // Current settings
     QString m_currentEffect;
     int m_currentSpeed;
     int m_currentBrightness;
     bool m_directionLeft;
-    QColor m_portColors[4]; // Colors for each port
+    QColor m_portColors[4][4]; // [port][color_index] - supports up to 4 colors per port
     bool m_portEnabled[4];  // Which ports have fans connected
+    int m_selectedPort; // -1 = none, 0-3 = port index
     
     // Lian Li integration
     LianLiQtIntegration *m_lianLi;

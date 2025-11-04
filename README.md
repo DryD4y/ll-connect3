@@ -2,6 +2,14 @@
 
 Complete Linux support for the Lian Li SL‑Infinity hub: a kernel fan driver and a Qt desktop app that mirrors Windows L‑Connect 3. The installer has been tested and verified on Kubutu 24.04LTS
 
+## Support This Project
+
+If you find this project helpful, please consider supporting its development:
+
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://www.paypal.com/paypalme/joeytroynm)
+
+Your support helps maintain and improve this open-source driver for the Lian Li community!
+
 ## Quick Install (Recommended)
 
 Use the provided scripts to install everything (libraries + driver + app) automatically.
@@ -13,7 +21,7 @@ cd ll-connect3
 ```
 
 After install:
-- Run the app: `LConnect3`
+- Run the app: `LLConnect3`
 - The kernel module auto‑loads on boot (`Lian_Li_SL_INFINITY`)
 - Fan control is available at `/proc/Lian_li_SL_INFINITY/Port_X/fan_speed`
 
@@ -41,17 +49,21 @@ The uninstall script removes the app, the kernel module, its auto‑load config,
 
 ## Application Overview
 
-- System Info, Fan Profiles, and Lighting control in one app.
+- System Info shows CPU, GPU, RAM, Network and Hard Drive useage
 
 <img src="docs/screenshots/systeminfo.png" width="600"/>
 
-- Per‑port custom fan curves with 4 presets and 3 custom slots.
+- Per‑port custom fan curves with 4 presets and 3 custom slots. Each port can have it's own curve
 
 <img src="docs/screenshots/fanprofile.png" width="600"/>
 
-- Built‑in RGB page with core effects, speed/brightness/direction.
+- Built‑in RGB page with 14 lighting effects: Breathing, Groove, Meteor, Mixing, Neon, Rainbow Wave, Runway, Spectrum Cycle, Stack, Staggered, Static, Tide, Tunnel, and Voice. Each effect supports color, speed/brightness control, with direction control where applicable 
 
 <img src="docs/screenshots/lighting.png" width="600"/>
+
+- Basic Settings page with debug capability along with reseting application settings to defaults
+
+<img src="docs/screenshots/settings.png" width="600"/>
 
 ## Development: Manual Build Instructions
 
@@ -99,7 +111,7 @@ make -j$(nproc)
 sudo make install
 
 # Run the app
-LConnect3
+LLConnect3
 
 # To uninstall the application
 sudo make uninstall
@@ -134,6 +146,38 @@ Troubleshooting tips:
 
 ## Troubleshooting (Basics)
 
+### Secure Boot Compatibility
+
+**IMPORTANT:** This driver does not work with Secure Boot enabled, as the kernel module is unsigned.
+
+To check if Secure Boot is enabled:
+```bash
+mokutil --sb-state
+```
+
+If Secure Boot is enabled, you have two options:
+
+**Option 1: Disable Secure Boot (Recommended for ease)**
+1. Reboot and enter your BIOS/UEFI settings (usually F2, F10, F12, or Del during boot)
+2. Find the Secure Boot option (usually under Security or Boot settings)
+3. Disable Secure Boot
+4. Save and exit
+
+**Option 2: Sign the kernel module (Advanced)**
+```bash
+# Generate signing keys (one-time setup)
+sudo /usr/src/linux-headers-$(uname -r)/scripts/sign-file sha256 \
+    /path/to/private/key.priv /path/to/public/key.der \
+    kernel/Lian_Li_SL_INFINITY.ko
+
+# Then enroll the key with MOK (Machine Owner Key)
+sudo mokutil --import /path/to/public/key.der
+```
+
+For more details on module signing, see the [kernel documentation](https://www.kernel.org/doc/html/latest/admin-guide/module-signing.html).
+
+### Common Issues
+
 ```bash
 # Detect device
 lsusb | grep -i lian
@@ -143,7 +187,16 @@ sudo dmesg | grep -i "sli" | tail -20
 
 # Missing headers (Debian/Ubuntu)
 sudo apt install linux-headers-$(uname -r)
+
+# Check if Secure Boot is blocking the module
+sudo dmesg | grep -i "lockdown\|secure"
 ```
+
+## Protocol Documentation
+
+For detailed information about the fan control protocol, including USB HID commands and reverse-engineering process:
+
+- [Lian Li SL-INFINITY Protocol Documentation](docs/protocol/Lian_Li_SL_INFINITY-protocol.md)
 
 ## Supported Device
 

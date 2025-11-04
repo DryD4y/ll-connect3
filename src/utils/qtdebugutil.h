@@ -34,8 +34,20 @@ inline void debugLog(Args&&... args) {
     }
 }
 
+// Category-specific debug logging
+template<typename... Args>
+inline void debugLogCategory(const char* category, Args&&... args) {
+    if (isDebugCategoryEnabled(category)) {
+        QDebug dbg = qDebug();
+        debugLog_impl(dbg, std::forward<Args>(args)...);
+    }
+}
+
 } // namespace DebugUtil
 
 // Convenience macro for Qt code
 #define DEBUG_LOG(...) DebugUtil::debugLog(__VA_ARGS__)
+
+// Convenience macro for category-specific debug logging
+#define DEBUG_LOG_CATEGORY(category, ...) DebugUtil::debugLogCategory(category, __VA_ARGS__)
 

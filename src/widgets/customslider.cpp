@@ -105,6 +105,8 @@ void CustomSlider::setRange(int min, int max)
     // For 25% increments, we use 0-4 range internally (0=0%, 1=25%, 2=50%, 3=75%, 4=100%)
     if (m_snapToIncrements && m_increment == 25) {
         m_slider->setRange(0, 4);
+        m_slider->setSingleStep(1);  // Move one position at a time (25% steps)
+        m_slider->setPageStep(1);    // Page step also moves one position
     } else {
         m_slider->setRange(min, max);
     }
@@ -113,19 +115,39 @@ void CustomSlider::setRange(int min, int max)
 void CustomSlider::setTickInterval(int interval)
 {
     m_slider->setTickInterval(interval);
-    m_slider->setTickPosition(QSlider::TicksBelow);
+    if (m_snapToIncrements && m_increment == 25) {
+        // For 25% increments, show ticks at all 5 positions (0, 25, 50, 75, 100)
+        m_slider->setTickPosition(QSlider::TicksBelow);
+    } else {
+        m_slider->setTickPosition(QSlider::TicksBelow);
+    }
 }
 
 void CustomSlider::setPageStep(int step)
 {
-    m_slider->setPageStep(step);
-    m_slider->setSingleStep(step);
+    if (m_snapToIncrements && m_increment == 25) {
+        // For 25% increments, step is always 1 position (25%)
+        m_slider->setPageStep(1);
+        m_slider->setSingleStep(1);
+    } else {
+        m_slider->setPageStep(step);
+        m_slider->setSingleStep(step);
+    }
 }
 
 void CustomSlider::setSnapToIncrements(bool enabled, int increment)
 {
     m_snapToIncrements = enabled;
     m_increment = increment;
+    
+    // If enabling 25% increments, update the slider range and steps
+    if (enabled && increment == 25) {
+        m_slider->setRange(0, 4);
+        m_slider->setSingleStep(1);  // Move one position at a time (25% steps)
+        m_slider->setPageStep(1);    // Page step also moves one position
+        m_slider->setTickInterval(1); // Show tick marks at each position
+        m_slider->setTickPosition(QSlider::TicksBelow);
+    }
 }
 
 void CustomSlider::onSliderValueChanged(int value)

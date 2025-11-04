@@ -121,8 +121,8 @@ uninstall_application() {
         else
             # Manual removal if install_manifest.txt doesn't exist
             print_info "Removing application files manually..."
-            sudo rm -f /usr/bin/LConnect3 2>/dev/null || true
-            sudo rm -f /usr/local/bin/LConnect3 2>/dev/null || true
+            sudo rm -f /usr/bin/LLConnect3 2>/dev/null || true
+            sudo rm -f /usr/local/bin/LLConnect3 2>/dev/null || true
             sudo rm -f /usr/share/applications/lconnect3.desktop 2>/dev/null || true
             sudo rm -f /usr/share/pixmaps/lconnect3.png 2>/dev/null || true
             print_success "Application files removed"
@@ -131,8 +131,8 @@ uninstall_application() {
     else
         # Manual removal if build directory doesn't exist
         print_info "Removing application files manually..."
-        sudo rm -f /usr/bin/LConnect3 2>/dev/null || true
-        sudo rm -f /usr/local/bin/LConnect3 2>/dev/null || true
+        sudo rm -f /usr/bin/LLConnect3 2>/dev/null || true
+        sudo rm -f /usr/local/bin/LLConnect3 2>/dev/null || true
         sudo rm -f /usr/share/applications/lconnect3.desktop 2>/dev/null || true
         sudo rm -f /usr/share/pixmaps/lconnect3.png 2>/dev/null || true
         print_success "Application files removed"
@@ -190,10 +190,10 @@ verify_uninstallation() {
     fi
     
     # Check application
-    if command -v LConnect3 &> /dev/null; then
-        print_error "✗ LConnect3 application is still installed"
+    if command -v LLConnect3 &> /dev/null; then
+        print_error "✗ LLConnect3 application is still installed"
     else
-        print_success "✓ LConnect3 application removed"
+        print_success "✓ LLConnect3 application removed"
     fi
     
     # Check desktop file

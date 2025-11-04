@@ -36,6 +36,14 @@ private:
     void drawBreathingEffect(QPainter &painter, const QRect &rect, int fanIndex);
     void drawMeteorEffect(QPainter &painter, const QRect &rect, int fanIndex);
     void drawRunwayEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawGrooveEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawMixingEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawNeonEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawStackEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawStaggeredEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawTideEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawTunnelEffect(QPainter &painter, const QRect &rect, int fanIndex);
+    void drawVoiceEffect(QPainter &painter, const QRect &rect, int fanIndex);
     
     QColor getRainbowColor(int position, int totalPositions) const;
     QColor applyBrightness(const QColor &color, int brightnessPercent) const;

@@ -3,7 +3,6 @@
 #include "pages/systeminfopage.h"
 #include "pages/fanprofilepage.h"
 #include "pages/lightingpage.h"
-#include "pages/slinfinitypage.h"
 #include "pages/settingspage.h"
 #include <QApplication>
 #include <QStyleFactory>
@@ -74,21 +73,21 @@ void MainWindow::setupUI()
     connect(ui->systemInfoBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
     connect(ui->fanProfileBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
     connect(ui->lightingBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
-    connect(ui->slInfinityBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
     connect(ui->settingsBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
     
     // Create page instances
     m_systemInfoPage = new SystemInfoPage();
     m_fanProfilePage = new FanProfilePage();
     m_lightingPage = new LightingPage();
-    m_slInfinityPage = new SLInfinityPage();
     m_settingsPage = new SettingsPage();
+    
+    // Set up cross-page references
+    m_settingsPage->setLightingPage(m_lightingPage);
     
     // Add pages to content stack
     ui->contentStack->addWidget(m_systemInfoPage);
     ui->contentStack->addWidget(m_fanProfilePage);
     ui->contentStack->addWidget(m_lightingPage);
-    ui->contentStack->addWidget(m_slInfinityPage);
     ui->contentStack->addWidget(m_settingsPage);
     
     // Set initial page
@@ -158,10 +157,6 @@ void MainWindow::setupSidebar()
     m_lightingBtn->setCheckable(true);
     connect(m_lightingBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
 
-    m_slInfinityBtn = new QPushButton("SL Infinity Utility");
-    m_slInfinityBtn->setObjectName("navButton");
-    m_slInfinityBtn->setCheckable(true);
-    connect(m_slInfinityBtn, &QPushButton::clicked, this, &MainWindow::onNavigationClicked);
 
     m_settingsBtn = new QPushButton("Settings");
     m_settingsBtn->setObjectName("navButton");
@@ -172,7 +167,6 @@ void MainWindow::setupSidebar()
         m_systemInfoBtn,
         m_fanProfileBtn,
         m_lightingBtn,
-        m_slInfinityBtn,
         m_settingsBtn
     };
 
@@ -183,7 +177,6 @@ void MainWindow::setupSidebar()
     m_sidebarLayout->addWidget(m_systemInfoBtn);
     m_sidebarLayout->addWidget(m_fanProfileBtn);
     m_sidebarLayout->addWidget(m_lightingBtn);
-    m_sidebarLayout->addWidget(m_slInfinityBtn);
     m_sidebarLayout->addWidget(m_settingsBtn);
 
     m_sidebarLayout->addStretch();
@@ -253,14 +246,12 @@ void MainWindow::setupMainContent()
     m_systemInfoPage = new SystemInfoPage();
     m_fanProfilePage = new FanProfilePage();
     m_lightingPage = new LightingPage();
-    m_slInfinityPage = new SLInfinityPage();
     m_settingsPage = new SettingsPage();
     
     // Add pages to stack
     m_contentStack->addWidget(m_systemInfoPage);
     m_contentStack->addWidget(m_fanProfilePage);
     m_contentStack->addWidget(m_lightingPage);
-    m_contentStack->addWidget(m_slInfinityPage);
     m_contentStack->addWidget(m_settingsPage);
     
     // Create main content widget
@@ -439,7 +430,6 @@ void MainWindow::onNavigationClicked()
     ui->systemInfoBtn->setChecked(false);
     ui->fanProfileBtn->setChecked(false);
     ui->lightingBtn->setChecked(false);
-    ui->slInfinityBtn->setChecked(false);
     ui->settingsBtn->setChecked(false);
     
     // Check clicked button
@@ -455,12 +445,9 @@ void MainWindow::onNavigationClicked()
     } else if (button == ui->lightingBtn) {
         ui->contentStack->setCurrentWidget(m_lightingPage);
         m_currentPage = 2;
-    } else if (button == ui->slInfinityBtn) {
-        ui->contentStack->setCurrentWidget(m_slInfinityPage);
-        m_currentPage = 3;
     } else if (button == ui->settingsBtn) {
         ui->contentStack->setCurrentWidget(m_settingsPage);
-        m_currentPage = 4;
+        m_currentPage = 3;
     }
 }
 

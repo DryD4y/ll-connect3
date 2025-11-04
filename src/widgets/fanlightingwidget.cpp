@@ -140,12 +140,12 @@ void FanLightingWidget::drawFan(QPainter &painter, const QRect &rect, int fanInd
         painter.setBrush(Qt::NoBrush);
         painter.drawEllipse(ledCenterX - ledRadius + 5, ledCenterY - ledRadius + 5, (ledRadius - 5) * 2, (ledRadius - 5) * 2);
     } else {
-        // Draw normal lighting effect
-        if (m_effect == "Rainbow") {
+        // Draw normal lighting effect - handle all effects with proper name mapping
+        if (m_effect == "Rainbow Wave" || m_effect == "Rainbow") {
             drawRainbowEffect(painter, ledRing, fanIndex);
-        } else if (m_effect == "Rainbow Morph") {
+        } else if (m_effect == "Spectrum Cycle" || m_effect == "Rainbow Morph") {
             drawRainbowMorphEffect(painter, ledRing, fanIndex);
-        } else if (m_effect == "Static Color") {
+        } else if (m_effect == "Static" || m_effect == "Static Color") {
             drawStaticColorEffect(painter, ledRing, fanIndex);
         } else if (m_effect == "Breathing") {
             drawBreathingEffect(painter, ledRing, fanIndex);
@@ -153,6 +153,25 @@ void FanLightingWidget::drawFan(QPainter &painter, const QRect &rect, int fanInd
             drawMeteorEffect(painter, ledRing, fanIndex);
         } else if (m_effect == "Runway") {
             drawRunwayEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Groove") {
+            drawGrooveEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Mixing") {
+            drawMixingEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Neon") {
+            drawNeonEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Stack") {
+            drawStackEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Staggered") {
+            drawStaggeredEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Tide") {
+            drawTideEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Tunnel") {
+            drawTunnelEffect(painter, ledRing, fanIndex);
+        } else if (m_effect == "Voice") {
+            drawVoiceEffect(painter, ledRing, fanIndex);
+        } else {
+            // Default fallback - draw static white
+            drawStaticColorEffect(painter, ledRing, fanIndex);
         }
     }
     
@@ -259,27 +278,39 @@ void FanLightingWidget::drawMeteorEffect(QPainter &painter, const QRect &rect, i
     int centerY = rect.center().y();
     int radius = qMin(rect.width(), rect.height()) / 2;
     
+    // Use port-specific color (fanIndex 0-3 maps to ports 1-4)
+    QColor portColor = m_portColors[fanIndex % 4];
+    
     // Calculate meteor position (faster movement for meteor effect)
+    // The meteor should travel around the circle continuously
     double speedMultiplier = m_speed / 100.0;
     double meteorPos = fmod(m_timeOffset * speedMultiplier * 1.5, 1.0);
     if (m_directionLeft) meteorPos = 1.0 - meteorPos;
     
-    // Draw meteor with bright head and fading trail
+    // Draw meteor with bright head and fading trail traveling around the circle
+    // meteorPos is 0.0 to 1.0, representing position around the circle
+    int meteorHeadLED = static_cast<int>(meteorPos * 16) % 16;
+    
     for (int i = 0; i < 16; ++i) {
-        double angle = (i * 22.5) * M_PI / 180.0;
-        double ledPosition = fmod(meteorPos * 16 + i, 16) / 16.0;
+        // Calculate distance from this LED to the meteor head (wrapping around)
+        int distance = (i - meteorHeadLED + 16) % 16;
+        double ledPosition = distance / 16.0;
         
-        // Create meteor trail (shorter and more focused)
-        if (ledPosition < 0.4) { // Show meteor trail for 40% of the ring
-            double trailIntensity = 1.0 - (ledPosition / 0.4); // Fade from 1.0 to 0.0
+        // Create meteor trail (shorter and more focused - about 5-6 LEDs)
+        if (distance <= 5) {
+            double trailIntensity = 1.0 - (ledPosition / (5.0 / 16.0)); // Fade from 1.0 to 0.0
+            if (trailIntensity < 0) trailIntensity = 0;
             trailIntensity = trailIntensity * trailIntensity; // Square for more dramatic fade
             
             // Bright head, fading tail
             int intensity = static_cast<int>(m_brightness * trailIntensity);
-            QColor color = applyBrightness(m_color, intensity);
+            QColor color = applyBrightness(portColor, intensity);
+            
+            // Calculate the angle for this LED position
+            double angle = (i * 22.5) * M_PI / 180.0;
             
             // Make the head brighter and larger
-            int penWidth = (ledPosition < 0.1) ? 6 : 4; // Thicker pen for the head
+            int penWidth = (distance == 0) ? 6 : 4; // Thicker pen for the head
             
             painter.setPen(QPen(color, penWidth));
             
@@ -352,4 +383,268 @@ void FanLightingWidget::updateAnimation()
     m_timeOffset += 0.1;
     m_animationFrame++;
     update();
+}
+
+void FanLightingWidget::drawGrooveEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Use port-specific color
+    QColor portColor = m_portColors[fanIndex % 4];
+    
+    // Groove: Rotating segments with color
+    double speedMultiplier = m_speed / 100.0;
+    double timeOffset = m_timeOffset * speedMultiplier;
+    if (m_directionLeft) timeOffset = -timeOffset;
+    
+    // Draw 4 segments rotating around the circle
+    for (int i = 0; i < 4; ++i) {
+        double angle = (i * 90.0) * M_PI / 180.0 + timeOffset;
+        double segmentLength = 22.5; // 22.5 degrees per segment
+        
+        for (int j = 0; j < 4; ++j) {
+            double ledAngle = angle + (j * 22.5) * M_PI / 180.0;
+            QColor color = applyBrightness(portColor, m_brightness);
+            painter.setPen(QPen(color, 4));
+            
+            int x1 = centerX + cos(ledAngle) * (radius - 8);
+            int y1 = centerY + sin(ledAngle) * (radius - 8);
+            int x2 = centerX + cos(ledAngle) * radius;
+            int y2 = centerY + sin(ledAngle) * radius;
+            
+            painter.drawLine(x1, y1, x2, y2);
+        }
+    }
+}
+
+void FanLightingWidget::drawMixingEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Mixing: One color per port, mixing with itself in a wave pattern
+    QColor portColor = m_portColors[fanIndex % 4];
+    
+    // Create a lighter and darker version for the mixing effect
+    QColor color1 = portColor;
+    QColor color2 = QColor(
+        qBound(0, portColor.red() + 50, 255),
+        qBound(0, portColor.green() + 50, 255),
+        qBound(0, portColor.blue() + 50, 255)
+    );
+    
+    double speedMultiplier = m_speed / 100.0;
+    double timeOffset = m_timeOffset * speedMultiplier;
+    
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        double mixPhase = sin(timeOffset + i * 0.5) * 0.5 + 0.5; // 0 to 1
+        
+        // Blend between color1 and color2
+        QColor color(
+            color1.red() * (1.0 - mixPhase) + color2.red() * mixPhase,
+            color1.green() * (1.0 - mixPhase) + color2.green() * mixPhase,
+            color1.blue() * (1.0 - mixPhase) + color2.blue() * mixPhase
+        );
+        color = applyBrightness(color, m_brightness);
+        
+        painter.setPen(QPen(color, 4));
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
+}
+
+void FanLightingWidget::drawNeonEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Neon: Pulsing glow effect with port-specific color
+    QColor portColor = m_portColors[fanIndex % 4];
+    
+    double speedMultiplier = m_speed / 100.0;
+    // Create a pulsing neon glow effect - smooth pulse, not wave
+    double pulsePhase = sin(m_timeOffset * speedMultiplier * 2.0) * 0.5 + 0.5; // 0 to 1
+    int pulseBrightness = m_brightness * (0.4 + 0.6 * pulsePhase); // Pulse between 40% and 100% brightness
+    
+    // Draw uniform neon glow around the entire ring (not a wave pattern)
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        QColor color = applyBrightness(portColor, pulseBrightness);
+        
+        // Make it look more neon-like with a glow effect (thicker pen)
+        painter.setPen(QPen(color, 6));
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
+}
+
+void FanLightingWidget::drawStackEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Stack: Lights stacking up from bottom
+    QColor portColor = m_portColors[fanIndex % 4];
+    
+    double speedMultiplier = m_speed / 100.0;
+    double stackPos = fmod(m_timeOffset * speedMultiplier, 1.0);
+    if (m_directionLeft) stackPos = 1.0 - stackPos;
+    
+    // Draw stacked segments
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        double normalizedPos = (i / 16.0);
+        
+        if (normalizedPos <= stackPos) {
+            QColor color = applyBrightness(portColor, m_brightness);
+            painter.setPen(QPen(color, 4));
+            
+            int x1 = centerX + cos(angle) * (radius - 8);
+            int y1 = centerY + sin(angle) * (radius - 8);
+            int x2 = centerX + cos(angle) * radius;
+            int y2 = centerY + sin(angle) * radius;
+            
+            painter.drawLine(x1, y1, x2, y2);
+        }
+    }
+}
+
+void FanLightingWidget::drawStaggeredEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Staggered: Alternating colors in a staggered pattern
+    QColor color1 = m_portColors[fanIndex % 4];
+    QColor color2 = (fanIndex % 4 < 3) ? m_portColors[(fanIndex % 4) + 1] : m_portColors[0];
+    
+    double speedMultiplier = m_speed / 100.0;
+    double timeOffset = m_timeOffset * speedMultiplier;
+    
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        int pattern = (static_cast<int>(timeOffset * 4) + i) % 4;
+        
+        QColor color = (pattern < 2) ? color1 : color2;
+        color = applyBrightness(color, m_brightness);
+        painter.setPen(QPen(color, 4));
+        
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
+}
+
+void FanLightingWidget::drawTideEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Tide: Wave-like effect with two colors
+    QColor color1 = m_portColors[fanIndex % 4];
+    QColor color2 = (fanIndex % 4 < 3) ? m_portColors[(fanIndex % 4) + 1] : m_portColors[0];
+    
+    double speedMultiplier = m_speed / 100.0;
+    double timeOffset = m_timeOffset * speedMultiplier;
+    
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        double wavePhase = sin(timeOffset * 2.0 + i * 0.5) * 0.5 + 0.5; // 0 to 1
+        
+        // Blend between color1 and color2 based on wave
+        QColor color(
+            color1.red() * (1.0 - wavePhase) + color2.red() * wavePhase,
+            color1.green() * (1.0 - wavePhase) + color2.green() * wavePhase,
+            color1.blue() * (1.0 - wavePhase) + color2.blue() * wavePhase
+        );
+        color = applyBrightness(color, m_brightness);
+        
+        painter.setPen(QPen(color, 4));
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
+}
+
+void FanLightingWidget::drawTunnelEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Tunnel: Spiral effect with multiple colors
+    QColor portColor = m_portColors[fanIndex % 4];
+    
+    double speedMultiplier = m_speed / 100.0;
+    double timeOffset = m_timeOffset * speedMultiplier;
+    if (m_directionLeft) timeOffset = -timeOffset;
+    
+    // Draw tunnel/spiral pattern
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        double spiralOffset = (i + timeOffset * 16) * 0.1;
+        double brightnessMod = 0.3 + 0.7 * (sin(spiralOffset) * 0.5 + 0.5);
+        
+        QColor color = applyBrightness(portColor, m_brightness * brightnessMod);
+        painter.setPen(QPen(color, 4));
+        
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
+}
+
+void FanLightingWidget::drawVoiceEffect(QPainter &painter, const QRect &rect, int fanIndex)
+{
+    int centerX = rect.center().x();
+    int centerY = rect.center().y();
+    int radius = qMin(rect.width(), rect.height()) / 2;
+    
+    // Voice: Sound-reactive pulsing effect
+    double speedMultiplier = m_speed / 100.0;
+    double pulsePhase = sin(m_timeOffset * speedMultiplier * 3.0) * 0.5 + 0.5;
+    double pulse2Phase = sin(m_timeOffset * speedMultiplier * 4.0 + 1.0) * 0.5 + 0.5;
+    
+    // Pulsing rainbow colors
+    for (int i = 0; i < 16; ++i) {
+        double angle = (i * 22.5) * M_PI / 180.0;
+        double pulseIntensity = (i % 2 == 0) ? pulsePhase : pulse2Phase;
+        int brightness = m_brightness * (0.4 + 0.6 * pulseIntensity);
+        
+        QColor color = getRainbowColor(i + fanIndex * 2, 16);
+        color = applyBrightness(color, brightness);
+        painter.setPen(QPen(color, 4));
+        
+        int x1 = centerX + cos(angle) * (radius - 8);
+        int y1 = centerY + sin(angle) * (radius - 8);
+        int x2 = centerX + cos(angle) * radius;
+        int y2 = centerY + sin(angle) * radius;
+        
+        painter.drawLine(x1, y1, x2, y2);
+    }
 }

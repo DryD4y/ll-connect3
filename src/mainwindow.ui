@@ -295,48 +295,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="slInfinityBtn">
-         <property name="text">
-          <string>SL Infinity</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">        QPushButton {
-            background-color: transparent;
-            border: none;
-            color: #B0B0B0;
-            padding: 12px 20px;
-            text-align: left;
-            font-size: 14px;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-            border-top-right-radius: 20px;
-            border-bottom-right-radius: 20px;
-            margin: 2px 10px 2px 0px;
-        }
-
-        QPushButton:hover {
-            background-color: #2A3441;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-            border-top-right-radius: 20px;
-            border-bottom-right-radius: 20px;
-        }
-
-        QPushButton:checked {
-            background-color: #1d4e83;
-            color: #FFFFFF;
-            border-top-left-radius: 0px;
-            border-bottom-left-radius: 0px;
-            border-top-right-radius: 20px;
-            border-bottom-right-radius: 20px;
-        }</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QPushButton" name="settingsBtn">
          <property name="text">
           <string>Settings</string>
