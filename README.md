@@ -1,6 +1,14 @@
 # <img src="resources/logo.png" width="50" align="center"/> LL-Connect 3 — SL-Infinity Hub
 
-Complete Linux support for the Lian Li SL‑Infinity hub: a kernel fan driver and a Qt desktop app that mirrors Windows L‑Connect 3. The installer has been tested and verified on Kubutu 24.04LTS
+Complete Linux support for the Lian Li SL‑Infinity hub: a kernel fan driver and a Qt desktop app that mirrors Windows L‑Connect 3.
+
+### Supported Distributions
+
+| Distribution Type | Tested On |
+|-------------------|-----------|
+| **Debian-based** | Ubuntu, Kubuntu 24.04 LTS, Linux Mint, Pop!_OS |
+| **RHEL-based** | Fedora 43, CentOS, Rocky Linux, AlmaLinux |
+| **Arch-based** | Arch Linux, Manjaro, EndeavourOS |
 
 ## Support This Project
 
@@ -14,11 +22,26 @@ Your support helps maintain and improve this open-source driver for the Lian Li 
 
 Use the provided scripts to install everything (libraries + driver + app) automatically.
 
+> **⚠️ Important:** Before running the installer, make sure your system is fully updated. The kernel driver requires kernel-devel/headers that match your running kernel. On a fresh install, run your system updates first and reboot:
+> 
+> ```bash
+> # Debian/Ubuntu
+> sudo apt update && sudo apt upgrade -y && sudo reboot
+> 
+> # Fedora/RHEL
+> sudo dnf upgrade --refresh && sudo reboot
+> 
+> # Arch
+> sudo pacman -Syu && sudo reboot
+> ```
+
 ```bash
 git clone https://github.com/joeytroy/ll-connect3.git
 cd ll-connect3
 ./install.sh
 ```
+
+The installer will present a menu to select your distribution type (Debian, RHEL, or Arch-based).
 
 After install:
 - Run the app: `LLConnect3`
@@ -28,14 +51,18 @@ After install:
 Optional GPU monitoring tools (install based on your GPU):
 
 ```bash
-# NVIDIA
-nvidia-smi   # included with NVIDIA proprietary drivers
+# NVIDIA (included with proprietary drivers)
+nvidia-smi
 
 # AMD
-sudo apt install radeontop
+sudo apt install radeontop        # Debian/Ubuntu
+sudo dnf install radeontop        # Fedora/RHEL
+sudo pacman -S radeontop          # Arch
 
 # Intel
-sudo apt install intel-gpu-tools
+sudo apt install intel-gpu-tools  # Debian/Ubuntu
+sudo dnf install intel-gpu-tools  # Fedora/RHEL
+sudo pacman -S intel-gpu-tools    # Arch
 ```
 
 ### Uninstall
@@ -139,9 +166,9 @@ sudo dmesg | grep -i "sli" | tail -20
 ```
 
 Troubleshooting tips:
-- Make sure kernel headers for your running kernel are installed.
+- Make sure kernel headers/devel for your running kernel are installed.
 - If you rebuilt the module, `sudo rmmod Lian_Li_SL_INFINITY && sudo modprobe Lian_Li_SL_INFINITY`.
-- After distro kernel updates, rebuild: `make clean && make && make install` in `kernel/`.
+- After kernel updates, rebuild: `cd kernel && make clean && make && sudo make install`.
 
 
 ## Troubleshooting (Basics)
@@ -185,12 +212,29 @@ lsusb | grep -i lian
 # Kernel logs
 sudo dmesg | grep -i "sli" | tail -20
 
-# Missing headers (Debian/Ubuntu)
+# Missing headers / kernel-devel mismatch
+# Debian/Ubuntu:
 sudo apt install linux-headers-$(uname -r)
+
+# Fedora/RHEL:
+sudo dnf install kernel-devel-$(uname -r)
+# If the exact version isn't available, update and reboot:
+sudo dnf upgrade --refresh && sudo reboot
+
+# Arch:
+sudo pacman -S linux-headers
 
 # Check if Secure Boot is blocking the module
 sudo dmesg | grep -i "lockdown\|secure"
 ```
+
+### Kernel Version Mismatch
+
+If you see an error like "Kernel build directory not found", it means your kernel-devel/headers don't match your running kernel. This commonly happens on fresh installs. Solution:
+
+1. Run a full system update (see commands above)
+2. Reboot into the new kernel
+3. Run the installer again
 
 ## Protocol Documentation
 
