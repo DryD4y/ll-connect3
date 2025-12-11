@@ -3,6 +3,8 @@
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <cmath>
+#include <QFont>
+#include <QFontMetrics>
 
 FanCurveWidget::FanCurveWidget(QWidget *parent)
     : QWidget(parent)
