@@ -42,6 +42,7 @@ private:
     QPointF dataToPixel(const QPointF &dataPoint);
     QPointF pixelToData(const QPointF &pixelPoint);
     int calculateRPMForTemperature(int temperature);
+    void drawHoverInfo(QPainter &painter, const QPointF &point, double temp, double rpm);
     
     QString m_profile;
     int m_currentTemperature;
@@ -64,6 +65,8 @@ private:
     // Interactive editing
     bool m_dragging;
     int m_draggedPoint;
+    int m_hoveredPoint; // Track which point is being hovered over
+    
     
     // Graph state
     bool m_graphEnabled;

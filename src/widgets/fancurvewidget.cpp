@@ -2,8 +2,6 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
-#include <QFont>
-#include <QFontMetrics>
 #include <cmath>
 
 FanCurveWidget::FanCurveWidget(QWidget *parent)
@@ -22,6 +20,7 @@ FanCurveWidget::FanCurveWidget(QWidget *parent)
     , m_displayRpmMax(2100)
     , m_dragging(false)
     , m_draggedPoint(-1)
+    , m_hoveredPoint(-1)
     , m_graphEnabled(true)
     , m_backgroundColor(QColor(26, 26, 26))
     , m_gridColor(QColor(60, 60, 60))
@@ -31,6 +30,7 @@ FanCurveWidget::FanCurveWidget(QWidget *parent)
     , m_currentLineColor(QColor(0, 255, 0))
 {
     setMinimumSize(400, 200);
+    setMouseTracking(true);  // Enable mouse tracking for hover events
     setupCurveData();
 }
 
@@ -158,6 +158,13 @@ void FanCurveWidget::paintEvent(QPaintEvent *event)
     // Draw current temperature line
     drawCurrentLine(painter);
     
+    // Draw hover info for hovered point when hovering over a point
+    if (m_hoveredPoint >= 0 && m_hoveredPoint < m_curvePoints.size()) {
+        QPointF point = dataToPixel(m_curvePoints[m_hoveredPoint]);
+        double temp = m_curvePoints[m_hoveredPoint].x();
+        double rpm = m_curvePoints[m_hoveredPoint].y();
+        drawHoverInfo(painter, point, temp, rpm);
+    }
 }
 
 void FanCurveWidget::drawGrid(QPainter &painter)
@@ -326,6 +333,48 @@ void FanCurveWidget::drawCurrentLine(QPainter &painter)
     painter.drawEllipse(curvePoint, 4, 4); // Fixed at the same position as temperature ball
 }
 
+void FanCurveWidget::drawHoverInfo(QPainter &painter, const QPointF &point, double temp, double rpm)
+{
+    // Format the temperature and RPM strings with proper rounding
+    QString tempStr = QString::number(static_cast<int>(std::round(temp))) + "°C";
+    QString rpmStr = QString::number(static_cast<int>(std::round(rpm))) + " RPM";
+    QString infoText = tempStr + " / " + rpmStr;
+
+    // Set up font
+    QFont font = painter.font();
+    font.setPointSize(10);
+    font.setBold(true);
+    painter.setFont(font);
+
+    // Calculate text size
+    QFontMetrics fm(font);
+    QRect textRect = fm.boundingRect(infoText);
+    int padding = 8;
+    int boxWidth = textRect.width() + padding * 2;
+    int boxHeight = textRect.height() + padding * 2;
+
+    int boxX = static_cast<int>(point.x()) + 15;
+    int boxY = static_cast<int>(point.y()) - boxHeight - 15;
+
+    // Make sure the box stays within widget bounds
+    if (boxX + boxWidth > width() - m_marginRight) {
+        boxX = static_cast<int>(point.x()) - boxWidth - 15; // Show to the left instead
+    }
+    if (boxY < m_marginTop) {
+        boxY = static_cast<int>(point.y()) + 15; // Show below instead
+    }
+
+    // Draw background rectangle with rounded corners
+    QRect infoRect(boxX, boxY, boxWidth, boxHeight);
+    painter.setPen(QPen(QColor(100, 150, 255), 2));
+    painter.setBrush(QBrush(QColor(40, 40, 40, 230))); // Semi-transparent dark background
+    painter.drawRoundedRect(infoRect, 6, 6);
+
+    // Draw text
+    painter.setPen(QPen(QColor(255, 255, 255), 1));
+    painter.drawText(infoRect, Qt::AlignCenter, infoText);
+}
+
 QPointF FanCurveWidget::dataToPixel(const QPointF &dataPoint)
 {
     QRect graphRect = rect().adjusted(m_marginLeft, m_marginTop, -m_marginRight, -m_marginBottom);
@@ -367,6 +416,23 @@ void FanCurveWidget::mousePressEvent(QMouseEvent *event)
 
 void FanCurveWidget::mouseMoveEvent(QMouseEvent *event)
 {
+    // Check if mouse is over any data point for hover effect
+    int hoveredPoint = -1;
+    QPointF mousePos = event->pos();
+    
+    for (int i = 0; i < m_curvePoints.size(); ++i) {
+        QPointF point = dataToPixel(m_curvePoints[i]);
+        if (QLineF(mousePos, point).length() < 10) {
+            hoveredPoint = i;
+            break;
+        }
+    }
+    
+    // Update hover state if needed
+    if (hoveredPoint != m_hoveredPoint) {
+        m_hoveredPoint = hoveredPoint;
+        update(); // Trigger repaint to show/hide hover info
+    }
     
     if (m_dragging && m_draggedPoint >= 0) {
         QPointF clickPoint = event->pos();
