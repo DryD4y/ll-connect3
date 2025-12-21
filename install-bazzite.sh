@@ -46,6 +46,19 @@ check_immutable_system() {
     fi
     
     print_success "Detected immutable system (rpm-ostree)"
+    
+    # Check if there are pending updates that require reboot
+    if rpm-ostree status 2>/dev/null | grep -q "PendingUpdate\|UpdatePending"; then
+        print_warning "There are pending rpm-ostree updates that require a reboot."
+        print_info "Run 'rpm-ostree status' to see details."
+        print_info "After rebooting, run this script again."
+        echo ""
+        read -p "Do you want to continue anyway? (y/n): " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            print_info "Please reboot first, then run this script again."
+            exit 0
+        fi
+    fi
 }
 
 # Check if running as root (we'll use sudo when needed)
@@ -125,14 +138,52 @@ check_dependencies() {
         missing_packages+=("kernel-devel-$RUNNING_KERNEL")
     fi
     
-    # Check for Qt6
-    if ! pkg-config --exists Qt6Core 2>/dev/null; then
+    # Check for Qt6 - try multiple methods
+    local qt6_found=false
+    
+    # Method 1: Check via pkg-config (if pkg-config is available)
+    if command -v pkg-config &> /dev/null; then
+        if pkg-config --exists Qt6Core 2>/dev/null; then
+            qt6_found=true
+        fi
+    fi
+    
+    # Method 2: Check for Qt6 headers directly
+    if [ "$qt6_found" = false ]; then
+        if [ -f "/usr/include/qt6/QtCore/QtCore" ] || [ -f "/usr/include/Qt6/QtCore/QtCore" ] || [ -d "/usr/include/qt6" ] || [ -d "/usr/include/Qt6" ]; then
+            qt6_found=true
+        fi
+    fi
+    
+    # Method 3: Check for qmake6 or cmake Qt6 finder
+    if [ "$qt6_found" = false ]; then
+        if command -v qmake6 &> /dev/null || command -v qmake-qt6 &> /dev/null; then
+            qt6_found=true
+        fi
+    fi
+    
+    if [ "$qt6_found" = false ]; then
         missing_packages+=("qt6-qtbase-devel")
     fi
     
     if [ ${#missing_packages[@]} -gt 0 ]; then
         print_error "Missing dependencies: ${missing_packages[*]}"
-        print_info "Installing dependencies..."
+        echo ""
+        
+        # Check if packages might be pending a reboot
+        if rpm-ostree status 2>/dev/null | grep -q "PendingUpdate\|UpdatePending"; then
+            print_warning "You have pending rpm-ostree updates that require a reboot."
+            print_info "The missing dependencies may already be installed but not yet active."
+            print_info ""
+            print_info "Please reboot first:"
+            print_info "  sudo systemctl reboot"
+            print_info ""
+            print_info "Then run this script again:"
+            print_info "  ./install-bazzite.sh"
+            exit 0
+        fi
+        
+        print_info "Installing missing dependencies..."
         install_dependencies
         # install_dependencies will exit, so we won't reach here
     fi
