@@ -55,12 +55,15 @@ private:
     QCheckBox *m_debugModeCheck;
     QCheckBox *m_debugFanSpeedsCheck;
     QCheckBox *m_debugFanLightsCheck;
+    QCheckBox *m_kernelLoggingCheck;
     
     // Action buttons
     QPushButton *m_resetAllBtn;
     
     // Reference to lighting page for reset
     LightingPage *m_lightingPage;
+
+    void writeKernelLoggingFlag(bool enabled);
 };
 
 #endif // SETTINGSPAGE_H
