@@ -71,6 +71,8 @@ check_sudo() {
 
 # Install dependencies using rpm-ostree
 install_dependencies() {
+    local missing_packages=("$@")
+    
     print_info "Installing dependencies for Bazzite OS..."
     print_warning "This will layer packages using rpm-ostree, which requires a reboot."
     print_warning "The installation will continue after you reboot and run this script again."
@@ -85,24 +87,26 @@ install_dependencies() {
     RUNNING_KERNEL=$(uname -r)
     print_info "Running kernel version: $RUNNING_KERNEL"
     
+    # Build the package list - include kernel headers if missing
+    local packages_to_install=("${missing_packages[@]}")
+    
+    # Always ensure kernel headers are included if kernel-devel is missing
+    if [[ " ${missing_packages[@]} " =~ " kernel-devel-" ]]; then
+        packages_to_install+=("kernel-headers-$RUNNING_KERNEL")
+    fi
+    
     # Layer packages using rpm-ostree
     print_info "Layering packages with rpm-ostree (this may take a few minutes)..."
+    print_info "Installing: ${packages_to_install[*]}"
     
-    # Install build tools and kernel development packages
-    sudo rpm-ostree install \
-        gcc \
-        gcc-c++ \
-        make \
-        cmake \
-        kernel-devel-$RUNNING_KERNEL \
-        kernel-headers-$RUNNING_KERNEL \
-        elfutils-libelf-devel \
-        qt6-qtbase-devel \
-        qt6-qtcharts-devel \
-        lm_sensors \
-        libusb1-devel \
-        hidapi-devel \
-        pkgconfig
+    # Use --allow-inactive to handle packages that might already be installed
+    # but are being explicitly requested (this is safe on immutable systems)
+    if ! sudo rpm-ostree install --allow-inactive "${packages_to_install[@]}"; then
+        print_error "Failed to install packages!"
+        print_info "You may need to install them manually:"
+        print_info "  sudo rpm-ostree install ${packages_to_install[*]}"
+        exit 1
+    fi
     
     print_success "Packages layered successfully"
     echo ""
@@ -166,6 +170,21 @@ check_dependencies() {
         missing_packages+=("qt6-qtbase-devel")
     fi
     
+    # Check for libusb-1.0 via pkg-config
+    if command -v pkg-config &> /dev/null; then
+        if ! pkg-config --exists libusb-1.0 2>/dev/null; then
+            missing_packages+=("libusb1-devel")
+        fi
+        
+        # Check for hidapi-hidraw via pkg-config
+        if ! pkg-config --exists hidapi-hidraw 2>/dev/null; then
+            missing_packages+=("hidapi-devel")
+        fi
+    else
+        # If pkg-config is not available, assume packages might be missing
+        missing_packages+=("pkgconfig")
+    fi
+    
     if [ ${#missing_packages[@]} -gt 0 ]; then
         print_error "Missing dependencies: ${missing_packages[*]}"
         echo ""
@@ -184,7 +203,7 @@ check_dependencies() {
         fi
         
         print_info "Installing missing dependencies..."
-        install_dependencies
+        install_dependencies "${missing_packages[@]}"
         # install_dependencies will exit, so we won't reach here
     fi
     
@@ -250,18 +269,26 @@ install_kernel_driver() {
         exit 1
     fi
     
-    # Install using the Makefile (which handles depmod)
-    print_info "Installing kernel module to system..."
-    make install
+    # Install to writable location (immutable systems have read-only /lib/modules)
+    print_info "Installing kernel module to writable location..."
+    RUNNING_KERNEL=$(uname -r)
+    MODULE_INSTALL_DIR="/usr/local/lib/modules/$RUNNING_KERNEL/extra"
+    
+    sudo mkdir -p "$MODULE_INSTALL_DIR"
+    sudo cp Lian_Li_SL_INFINITY.ko "$MODULE_INSTALL_DIR/"
+    
+    # Update module dependencies (depmod looks in /usr/local/lib/modules too)
+    print_info "Updating module dependencies..."
+    sudo depmod -a
     
     # Load the module
     print_info "Loading kernel module..."
     sudo rmmod Lian_Li_SL_INFINITY 2>/dev/null || true
     
-    # Try insmod first if modprobe fails
+    # Try modprobe first (should find it in /usr/local/lib/modules)
     if ! sudo modprobe Lian_Li_SL_INFINITY 2>/dev/null; then
-        print_warning "modprobe failed, trying insmod..."
-        if ! sudo insmod Lian_Li_SL_INFINITY.ko 2>/dev/null; then
+        print_warning "modprobe failed, trying insmod with full path..."
+        if ! sudo insmod "$MODULE_INSTALL_DIR/Lian_Li_SL_INFINITY.ko" 2>/dev/null; then
             print_error "Failed to load kernel module!"
             print_info "Check dmesg for errors: sudo dmesg | tail -20"
             exit 1
@@ -339,8 +366,9 @@ install_application() {
     cd "$BUILD_DIR"
     
     # Configure with CMake
+    # Use /usr/local for immutable systems (writable location)
     print_info "Configuring build with CMake..."
-    if ! cmake -DCMAKE_INSTALL_PREFIX=/usr ..; then
+    if ! cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..; then
         print_error "CMake configuration failed!"
         print_info "Ensure Qt6 development packages are layered:"
         print_info "  sudo rpm-ostree install qt6-qtbase-devel qt6-qtcharts-devel && sudo systemctl reboot"
@@ -403,8 +431,8 @@ verify_installation() {
         print_error "✗ LLConnect3 application not found"
     fi
     
-    # Check desktop file
-    if [ -f "/usr/share/applications/lconnect3.desktop" ]; then
+    # Check desktop file (check both /usr and /usr/local for compatibility)
+    if [ -f "/usr/local/share/applications/lconnect3.desktop" ] || [ -f "/usr/share/applications/lconnect3.desktop" ]; then
         print_success "✓ Desktop file installed"
     else
         print_warning "✗ Desktop file not found"
@@ -472,7 +500,10 @@ main() {
     
     print_warning "Bazzite OS Notes:"
     echo "  - After kernel updates via rpm-ostree, rebuild the module:"
-    echo "    cd $KERNEL_DIR && make clean && make && sudo make install"
+    echo "    cd $KERNEL_DIR && make clean && make"
+    echo "    sudo cp Lian_Li_SL_INFINITY.ko /usr/local/lib/modules/\$(uname -r)/extra/"
+    echo "    sudo depmod -a && sudo modprobe -r Lian_Li_SL_INFINITY && sudo modprobe Lian_Li_SL_INFINITY"
+    echo "  - The kernel module is installed to /usr/local/lib/modules/ (writable location)"
     echo "  - The kernel module persists across reboots once installed"
     echo "  - Application and udev rules persist across reboots"
     echo ""
