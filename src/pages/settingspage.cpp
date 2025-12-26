@@ -11,6 +11,7 @@ SettingsPage::SettingsPage(QWidget *parent)
     , m_lightingPage(nullptr)
 {
     setupUI();
+    setupBehaviorSettings();
     setupFanConfiguration();
     setupDebugSettings();
     loadFanConfiguration();
@@ -94,6 +95,36 @@ void SettingsPage::setupUI()
             background-color: #1e6bb8;
         }
     )");
+}
+
+void SettingsPage::setupBehaviorSettings()
+{
+    m_behaviorGroup = new QGroupBox("Startup & Display");
+    m_behaviorGroup->setObjectName("settingsGroup");
+
+    QVBoxLayout *behaviorLayout = new QVBoxLayout(m_behaviorGroup);
+    behaviorLayout->setSpacing(12);
+
+    QLabel *descLabel = new QLabel("Control how LL-Connect 3 starts:");
+    descLabel->setObjectName("settingsLabel");
+    descLabel->setWordWrap(true);
+    behaviorLayout->addWidget(descLabel);
+
+    QSettings settings("LianLi", "LConnect3");
+    bool minimizeOnStartup = settings.value("Startup/MinimizeOnStartup", false).toBool();
+
+    m_minimizeOnStartupCheck = new QCheckBox("Minimize window on startup");
+    m_minimizeOnStartupCheck->setObjectName("settingsCheck");
+    m_minimizeOnStartupCheck->setChecked(minimizeOnStartup);
+    connect(m_minimizeOnStartupCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        QSettings settings("LianLi", "LConnect3");
+        settings.setValue("Startup/MinimizeOnStartup", checked);
+        settings.sync();
+        emit minimizeOnStartupChanged(checked);
+    });
+    behaviorLayout->addWidget(m_minimizeOnStartupCheck);
+
+    m_leftLayout->addWidget(m_behaviorGroup);
 }
 
 void SettingsPage::onResetAll()
